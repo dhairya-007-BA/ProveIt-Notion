@@ -1,0 +1,318 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function userExists() {
+      return signedIn() && exists(userPath());
+    }
+
+    function userData() {
+      return get(userPath()).data;
+    }
+
+    function activeUser() {
+      return userExists()
+        && userData().active == true;
+    }
+
+    function isBOD() {
+      return activeUser()
+        && (
+          userData().role == "bod"
+          || userData().group == "bod"
+        );
+    }
+
+    function membershipPath(workspaceId) {
+      return /databases/$(database)/documents/workspaceMemberships/$(workspaceId + "_" + request.auth.uid);
+    }
+
+    function hasActiveMembership(workspaceId) {
+      return activeUser()
+        && exists(membershipPath(workspaceId))
+        && get(membershipPath(workspaceId)).data.active == true;
+    }
+
+    function canAccessWorkspace(workspaceId) {
+      return activeUser()
+        && (
+          isBOD()
+          || workspaceId == "company"
+          || hasActiveMembership(workspaceId)
+        );
+    }
+
+    // =========================================
+    // USERS
+    // =========================================
+
+    match /users/{userId} {
+
+      allow read: if activeUser();
+
+      /*
+       * Only BOD administrators can create
+       * or delete employee profiles.
+       */
+      allow create, delete: if isBOD();
+
+      /*
+       * BOD administrators retain full
+       * update access.
+       */
+      allow update: if isBOD();
+
+      /*
+       * EMPLOYEE PASSWORD SETUP
+       *
+       * An employee may update their own
+       * profile ONLY to clear
+       * mustChangePassword.
+       *
+       * They cannot change:
+       *
+       * - employeeId
+       * - name
+       * - role
+       * - group
+       * - active
+       * - memberships
+       * - or any other profile field.
+       */
+      allow update: if
+        activeUser()
+        && request.auth.uid == userId
+
+        /*
+         * Only these two fields may differ
+         * between the stored document and
+         * proposed document.
+         */
+        && request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            "mustChangePassword",
+            "updatedAt"
+          ])
+
+        /*
+         * The employee can only CLEAR the
+         * password-change requirement.
+         *
+         * They cannot turn it back on.
+         */
+        && request.resource.data.mustChangePassword == false;
+    }
+
+    // =========================================
+    // WORKSPACES
+    // =========================================
+
+    match /workspaces/{workspaceId} {
+
+      allow read: if canAccessWorkspace(workspaceId);
+
+      allow create, update, delete: if isBOD();
+    }
+
+    // =========================================
+    // WORKSPACE MEMBERSHIPS
+    // =========================================
+
+    match /workspaceMemberships/{membershipId} {
+
+      allow read: if activeUser();
+
+      allow create, update, delete: if isBOD();
+    }
+// =========================================
+// DOCUMENTS
+// =========================================
+
+match /documents/{documentId} {
+
+  /*
+   * Employees may read documents only
+   * from workspaces they are allowed
+   * to access.
+   */
+  allow read: if
+    canAccessWorkspace(
+      resource.data.workspaceId
+    );
+
+  /*
+   * Employees may create documents only
+   * inside workspaces they can access.
+   */
+  allow create: if
+    canAccessWorkspace(
+      request.resource.data.workspaceId
+    );
+
+  /*
+   * A document may only be updated when
+   * the employee can access both the
+   * existing workspace and the proposed
+   * workspace.
+   *
+   * This prevents moving a document into
+   * or out of an unauthorized workspace.
+   */
+  allow update: if
+    canAccessWorkspace(
+      resource.data.workspaceId
+    )
+    &&
+    canAccessWorkspace(
+      request.resource.data.workspaceId
+    );
+
+  /*
+   * Permanent deletion is restricted
+   * to BOD administrators.
+   */
+  allow delete: if isBOD();
+}
+    // =========================================
+    // TASKS
+    // =========================================
+
+    match /tasks/{taskId} {
+
+      allow read: if
+        canAccessWorkspace(
+          resource.data.workspaceId
+        );
+
+      allow create: if
+        canAccessWorkspace(
+          request.resource.data.workspaceId
+        );
+
+      allow update: if
+        canAccessWorkspace(
+          resource.data.workspaceId
+        )
+        &&
+        canAccessWorkspace(
+          request.resource.data.workspaceId
+        );
+
+      allow delete: if isBOD();
+    }
+
+    // =========================================
+    // MEETINGS
+    // =========================================
+
+    match /meetings/{meetingId} {
+
+      allow read: if
+        canAccessWorkspace(
+          resource.data.workspaceId
+        );
+
+      allow create: if
+        canAccessWorkspace(
+          request.resource.data.workspaceId
+        );
+
+      allow update: if
+        canAccessWorkspace(
+          resource.data.workspaceId
+        )
+        &&
+        canAccessWorkspace(
+          request.resource.data.workspaceId
+        );
+
+      allow delete: if isBOD();
+    }
+    // =========================================
+    // DOCUMENTS
+    // =========================================
+
+    match /documents/{documentId} {
+
+      /*
+       * Employees may read documents only
+       * when they have access to the
+       * document's workspace.
+       */
+      allow read: if
+        canAccessWorkspace(
+          resource.data.workspaceId
+        );
+
+      /*
+       * Employees may create documents only
+       * inside a workspace they can access.
+       */
+      allow create: if
+        canAccessWorkspace(
+          request.resource.data.workspaceId
+        )
+        &&
+        request.resource.data.createdBy
+          == request.auth.uid;
+
+      /*
+       * Employees may edit documents only
+       * when they have access to both the
+       * existing workspace and the workspace
+       * specified by the updated document.
+       */
+      allow update: if
+        canAccessWorkspace(
+          resource.data.workspaceId
+        )
+        &&
+        canAccessWorkspace(
+          request.resource.data.workspaceId
+        );
+
+      /*
+       * Permanent deletion remains an
+       * administrator action.
+       */
+      allow delete: if isBOD();
+    }
+    // =========================================
+    // ACTIVITY
+    // =========================================
+
+    match /activity/{activityId} {
+
+      allow read: if
+        canAccessWorkspace(
+          resource.data.workspaceId
+        );
+
+      allow create: if
+        canAccessWorkspace(
+          request.resource.data.workspaceId
+        );
+
+      allow update, delete: if false;
+    }
+
+    // =========================================
+    // EVERYTHING ELSE
+    // =========================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
