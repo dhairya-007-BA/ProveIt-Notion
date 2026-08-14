@@ -8,6 +8,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  type DocumentData,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -48,10 +49,7 @@ export async function createTask(
 
   const activityRef =
     doc(
-      collection(
-        db,
-        "activity"
-      )
+      collection(db, "activities")
     );
 
   batch.set(
@@ -165,7 +163,7 @@ export interface UpdateTaskInput {
 
 function convertTask(
   id: string,
-  data: Record<string, any>
+  data: DocumentData
 ): ProveItTask {
   return {
     id,

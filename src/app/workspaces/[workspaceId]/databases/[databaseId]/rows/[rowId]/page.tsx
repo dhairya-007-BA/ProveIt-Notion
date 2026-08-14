@@ -3,13 +3,25 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { Comments } from "@/components/comments";
 
 type Property = {
   id: string;
   name: string;
   type: string;
+  options?: SelectOption[];
+};
+
+type SelectOption = {
+  id: string;
+  name: string;
 };
 
 type DatabaseData = {
@@ -89,7 +101,7 @@ export default function RowPage() {
 
   async function updateValue(
     propertyId: string,
-    value: string | number | null
+    value: string | number | boolean | null
   ) {
     if (!row) return;
 
@@ -104,6 +116,7 @@ export default function RowPage() {
     try {
       await updateDoc(rowRef, {
         [`values.${propertyId}`]: value,
+        updatedAt: serverTimestamp(),
       });
 
       setRow((current) => {
@@ -154,19 +167,19 @@ export default function RowPage() {
       : "";
 
   return (
-    <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-4xl px-10 py-8">
+    <main className="min-h-screen bg-[#fbfbfa]">
+      <div className="mx-auto max-w-3xl px-6 py-6 md:px-10 md:py-10">
 
         <Link
           href={`/workspaces/${workspaceId}/databases/${databaseId}`}
-          className="text-sm text-gray-500 hover:text-gray-900"
+          className="rounded px-1 py-1 text-sm text-[#787774] transition hover:bg-black/[0.05] hover:text-[#37352f]"
         >
           ← Back to database
         </Link>
 
-        <div className="mt-12">
+        <div className="mt-10">
 
-          <div className="text-5xl">
+          <div className="text-4xl">
             📄
           </div>
 
@@ -209,9 +222,9 @@ export default function RowPage() {
               bg-transparent
               text-4xl
               font-bold
-              text-gray-900
+              text-[#37352f]
               outline-none
-              placeholder:text-gray-300
+              placeholder:text-[#b4b3af]
             "
           />
 
@@ -219,7 +232,7 @@ export default function RowPage() {
 
         {/* PROPERTIES */}
 
-        <div className="mt-10 max-w-2xl">
+        <div className="mt-10 max-w-2xl rounded-md border border-black/[0.09] bg-white px-4">
 
           {properties
             .filter(
@@ -238,20 +251,54 @@ export default function RowPage() {
                     flex
                     items-center
                     border-b
-                    border-gray-100
-                    py-3
+                    border-black/[0.08]
+                    py-2.5
                   "
                 >
 
                   {/* PROPERTY NAME */}
 
-                  <div className="w-56 shrink-0 text-sm text-gray-500">
+                  <div className="w-48 shrink-0 text-sm text-[#787774]">
                     {property.name}
                   </div>
 
                   {/* NUMBER */}
 
-                  {property.type === "number" ? (
+                  {property.type === "select" ? (
+
+                    <select
+                      aria-label={property.name}
+                      value={
+                        typeof currentValue === "string"
+                          ? currentValue
+                          : ""
+                      }
+                      onChange={(event) =>
+                        updateValue(
+                          property.id,
+                          event.target.value
+                        )
+                      }
+                      className="flex-1 rounded border-none bg-transparent px-2 py-1.5 text-sm text-[#37352f] outline-none hover:bg-[#f1f1ef] focus:bg-[#f1f1ef]"
+                    >
+                      <option value="">Empty</option>
+                      {typeof currentValue === "string" &&
+                        currentValue &&
+                        !(property.options || []).some(
+                          (option) => option.id === currentValue
+                        ) && (
+                          <option value={currentValue}>
+                            {`Legacy: ${currentValue}`}
+                          </option>
+                        )}
+                      {(property.options || []).map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </select>
+
+                  ) : property.type === "number" ? (
 
                     <input
                       type="number"
@@ -374,6 +421,12 @@ export default function RowPage() {
             })}
 
         </div>
+
+        <Comments
+          workspaceId={workspaceId}
+          entityType="database-row"
+          entityId={`${databaseId}:${rowId}`}
+        />
 
       </div>
     </main>

@@ -2,44 +2,39 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 
+import { ProveItLogo } from "@/components/proveit-logo";
 import { useAuth } from "@/components/auth-provider";
 import { getAccessibleWorkspaces } from "@/lib/accessible-workspaces";
-
 import { Workspace } from "@/types/workspace";
+import { db } from "@/lib/firebase";
 
 export default function Sidebar() {
-  const { profile } = useAuth();
+  const { profile, firebaseUser } = useAuth();
+  const pathname = usePathname();
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [unread, setUnread] = useState(0);
+  const workspaceId = pathname.match(/^\/workspaces\/([^/]+)/)?.[1];
 
-  const [workspaces, setWorkspaces] =
-    useState<Workspace[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
+  useEffect(() => {
+    if (!firebaseUser || !workspaceId) return;
+    return onSnapshot(query(collection(db, "notifications"), where("recipientUid", "==", firebaseUser.uid)), (snapshot) => setUnread(snapshot.docs.filter((item) => item.data().workspaceId === workspaceId && !item.data().readAt && !item.data().archivedAt).length), (error) => console.error("Failed to load inbox badge:", error));
+  }, [firebaseUser, workspaceId]);
 
   useEffect(() => {
     if (!profile) {
-      setWorkspaces([]);
-      setLoading(false);
       return;
     }
 
     async function loadWorkspaces() {
       try {
         setLoading(true);
-
-        const data =
-          await getAccessibleWorkspaces(
-            profile!
-          );
-
-        setWorkspaces(data);
+        setWorkspaces(await getAccessibleWorkspaces(profile!));
       } catch (error) {
-        console.error(
-          "Failed to load accessible workspaces:",
-          error
-        );
-
+        console.error("Failed to load accessible workspaces:", error);
         setWorkspaces([]);
       } finally {
         setLoading(false);
@@ -50,89 +45,57 @@ export default function Sidebar() {
   }, [profile]);
 
   return (
-    <aside className="min-h-screen w-72 border-r border-gray-200 bg-white p-5">
-      <div className="mb-8">
-        <Link href="/">
-          <h1 className="text-lg font-semibold">
-            ProveIt
-          </h1>
+    <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-black/[0.09] bg-[#f7f7f5] px-2.5 py-3 text-[#37352f] max-md:hidden">
+      <Link
+        href="/"
+        className="mb-5 flex items-center gap-2.5 rounded-md px-2 py-1.5 transition hover:bg-black/[0.05]"
+      >
+        <ProveItLogo className="h-7 w-7" priority />
+        <span className="text-sm font-semibold tracking-[-0.01em]">ProveIt</span>
+      </Link>
 
-          <p className="mt-1 text-xs text-gray-400">
-            Internal Workspace
-          </p>
-        </Link>
-      </div>
-
-      <nav>
-        <p className="mb-3 px-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-          Workspaces
-        </p>
-
+      <nav className="min-h-0 flex-1 overflow-y-auto">
+        {workspaceId && <Link href={`/workspaces/${workspaceId}/inbox`} className="mb-3 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-black/[0.055]"><span>◉</span><span>Inbox</span>{unread > 0 && <span aria-label={`${unread} unread notifications`} className="ml-auto rounded-full bg-[#e1e1de] px-1.5 py-0.5 text-[11px]">{unread}</span>}</Link>}
+        <p className="mb-1 px-2 py-1 text-[11px] font-medium text-[#787774]">WORKSPACES</p>
         {loading ? (
-          <div className="px-2 py-3 text-sm text-gray-400">
-            Loading...
-          </div>
+          <p className="px-2 py-2 text-sm text-[#9b9a97]">Loading…</p>
         ) : workspaces.length === 0 ? (
-          <div className="px-2 py-3 text-sm text-gray-400">
-            No workspaces available.
-          </div>
+          <p className="px-2 py-2 text-sm text-[#9b9a97]">No workspaces available.</p>
         ) : (
-          <div className="space-y-1">
-            {workspaces.map(
-              (workspace) => (
-                <Link
-                  key={workspace.id}
-                  href={`/workspaces/${workspace.id}`}
-                  className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <span className="text-lg">
-                    {workspace.icon || "📁"}
-                  </span>
+          <div className="space-y-0.5">
+            {workspaces.map((workspace) => (
+              <Link
+                key={workspace.id}
+                href={`/workspaces/${workspace.id}`}
+                className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition hover:bg-black/[0.055]"
+              >
+                <span className="grid h-5 w-5 shrink-0 place-items-center text-base leading-none">
+                  {workspace.icon || "▦"}
+                </span>
+                <span className="truncate">{workspace.name}</span>
+                <span className="ml-auto opacity-0 transition group-hover:opacity-40">›</span>
+              </Link>
+            ))}
+          </div>
+        )}
 
-                  <span className="truncate font-medium">
-                    {workspace.name}
-                  </span>
-                </Link>
-              )
-            )}
+        {profile?.group === "bod" && (
+          <div className="mt-6 border-t border-black/[0.07] pt-4">
+            <p className="mb-1 px-2 py-1 text-[11px] font-medium text-[#787774]">ADMINISTRATION</p>
+            <Link href="/admin/employees" className="block rounded-md px-2 py-1.5 text-sm hover:bg-black/[0.055]">Employees</Link>
+            <Link href="/admin/workspaces" className="block rounded-md px-2 py-1.5 text-sm hover:bg-black/[0.055]">Workspace settings</Link>
           </div>
         )}
       </nav>
 
-      {profile?.group === "bod" && (
-        <div className="mt-8 border-t border-gray-100 pt-6">
-          <p className="mb-3 px-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Administration
-          </p>
-
-          <nav className="space-y-1">
-            <Link
-              href="/admin/employees"
-              className="block rounded-lg px-2 py-2.5 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              👥 Employees
-            </Link>
-
-            <Link
-              href="/admin/workspaces"
-              className="block rounded-lg px-2 py-2.5 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              ⚙️ Workspaces
-            </Link>
-          </nav>
-        </div>
-      )}
-
       {profile && (
-        <div className="mt-8 border-t border-gray-100 pt-5">
-          <div className="px-2">
-            <p className="truncate text-sm font-medium">
-              {profile.name}
-            </p>
-
-            <p className="mt-1 text-xs text-gray-400">
-              {profile.employeeId}
-            </p>
+        <div className="mt-3 flex items-center gap-2 rounded-md border-t border-black/[0.07] px-2 pt-3">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[#e7e7e4] text-xs font-semibold text-[#5f5e5a]">
+            {profile.name.slice(0, 1).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium">{profile.name}</p>
+            <p className="truncate text-[11px] text-[#9b9a97]">{profile.employeeId}</p>
           </div>
         </div>
       )}

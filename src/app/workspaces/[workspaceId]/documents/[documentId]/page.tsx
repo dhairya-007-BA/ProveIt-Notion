@@ -23,6 +23,7 @@ import {
 import Sidebar from "@/components/sidebar";
 import { useAuth } from "@/components/auth-provider";
 import { db } from "@/lib/firebase";
+import { Comments } from "@/components/comments";
 
 export default function DocumentEditorPage() {
   const params =
@@ -376,6 +377,12 @@ export default function DocumentEditorPage() {
             </div>
 
           </div>
+
+          <Comments
+            workspaceId={workspaceId}
+            entityType="document"
+            entityId={documentId}
+          />
 
         </div>
       </section>

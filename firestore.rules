@@ -27,8 +27,8 @@ service cloud.firestore {
     function isBOD() {
       return activeUser()
         && (
-          userData().role == "bod"
-          || userData().group == "bod"
+          userData().get("role", "") == "bod"
+          || userData().get("group", "") == "bod"
         );
     }
 
@@ -48,6 +48,28 @@ service cloud.firestore {
           isBOD()
           || workspaceId == "company"
           || hasActiveMembership(workspaceId)
+        );
+    }
+
+    function userPathFor(userId) {
+      return /databases/$(database)/documents/users/$(userId);
+    }
+
+    function membershipPathFor(workspaceId, userId) {
+      return /databases/$(database)/documents/workspaceMemberships/$(workspaceId + "_" + userId);
+    }
+
+    function canUserAccessWorkspace(userId, workspaceId) {
+      return exists(userPathFor(userId))
+        && get(userPathFor(userId)).data.active == true
+        && (
+          workspaceId == "company"
+          || get(userPathFor(userId)).data.get("role", "") == "bod"
+          || get(userPathFor(userId)).data.get("group", "") == "bod"
+          || (
+            exists(membershipPathFor(workspaceId, userId))
+            && get(membershipPathFor(workspaceId, userId)).data.active == true
+          )
         );
     }
 
@@ -102,6 +124,7 @@ service cloud.firestore {
           .affectedKeys()
           .hasOnly([
             "mustChangePassword",
+            "notificationPreferences",
             "updatedAt"
           ])
 
@@ -134,6 +157,53 @@ service cloud.firestore {
       allow read: if activeUser();
 
       allow create, update, delete: if isBOD();
+    }
+
+    // =========================================
+    // DATABASES
+    // =========================================
+
+    function databasePath(databaseId) {
+      return /databases/$(database)/documents/databases/$(databaseId);
+    }
+
+    function canAccessDatabase(databaseId) {
+      return canAccessWorkspace(
+        get(databasePath(databaseId)).data.workspaceId
+      );
+    }
+
+    match /databases/{databaseId} {
+
+      allow read: if canAccessWorkspace(resource.data.workspaceId);
+
+      allow create: if
+        canAccessWorkspace(request.resource.data.workspaceId)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      /*
+       * Databases remain in their original workspace and retain their creator.
+       * This matches the current client behavior and prevents a writer from
+       * moving a database into a workspace through a metadata update.
+       */
+      allow update: if
+        canAccessWorkspace(resource.data.workspaceId)
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.createdBy == resource.data.createdBy;
+
+      allow delete: if
+        canAccessWorkspace(resource.data.workspaceId);
+
+      match /rows/{rowId} {
+
+        allow read: if canAccessDatabase(databaseId);
+
+        allow create: if
+          canAccessDatabase(databaseId)
+          && request.resource.data.createdBy == request.auth.uid;
+
+        allow update, delete: if canAccessDatabase(databaseId);
+      }
     }
 // =========================================
 // DOCUMENTS
@@ -292,7 +362,7 @@ match /documents/{documentId} {
     // ACTIVITY
     // =========================================
 
-    match /activity/{activityId} {
+    match /activities/{activityId} {
 
       allow read: if
         canAccessWorkspace(
@@ -305,6 +375,30 @@ match /documents/{documentId} {
         );
 
       allow update, delete: if false;
+    }
+
+    match /comments/{commentId} {
+      allow read: if resource.data.keys().hasAll(["workspaceId"])
+        && canAccessWorkspace(resource.data.workspaceId);
+      allow create: if canAccessWorkspace(request.resource.data.workspaceId)
+        && request.resource.data.authorUid == request.auth.uid;
+      allow update, delete: if canAccessWorkspace(resource.data.workspaceId)
+        && resource.data.authorUid == request.auth.uid;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if activeUser()
+        && resource.data.keys().hasAll(["recipientUid"])
+        && resource.data.recipientUid == request.auth.uid;
+      allow create: if canAccessWorkspace(request.resource.data.workspaceId)
+        && request.resource.data.actorUid == request.auth.uid
+        && canUserAccessWorkspace(
+          request.resource.data.recipientUid,
+          request.resource.data.workspaceId
+        );
+      allow update: if activeUser() && resource.data.recipientUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readAt", "archivedAt"]);
+      allow delete: if false;
     }
 
     // =========================================

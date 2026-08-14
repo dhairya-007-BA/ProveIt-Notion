@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npm run test:unit && npm run test:rules",
+    "test:unit": "vitest run tests/unit",
+    "test:rules": "JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@21} PATH=${JAVA_HOME:-/opt/homebrew/opt/openjdk@21}/bin:$PATH firebase --project proveit-test emulators:exec --only firestore \"vitest run tests/rules\"",
+    "test:e2e": "JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk@21} PATH=${JAVA_HOME:-/opt/homebrew/opt/openjdk@21}/bin:$PATH firebase --project proveit-test emulators:exec --only auth,firestore \"npm run test:e2e:run\"",
+    "test:e2e:run": "FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 tsx tests/e2e/seed.ts && playwright test"
   },
   "dependencies": {
     "firebase": "^12.17.1",
@@ -16,13 +21,18 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "firebase-tools": "^15.27.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.12",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

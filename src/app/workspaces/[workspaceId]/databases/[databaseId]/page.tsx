@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import {
   addDoc,
   collection,
   deleteDoc,
   doc,
-  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -20,6 +19,7 @@ import {
 import Sidebar from "@/components/sidebar";
 import { useAuth } from "@/components/auth-provider";
 import { db } from "@/lib/firebase";
+import { Comments } from "@/components/comments";
 
 type PropertyType =
   | "title"
@@ -36,6 +36,12 @@ interface DatabaseProperty {
   id: string;
   name: string;
   type: PropertyType;
+  options?: SelectOption[];
+}
+
+interface SelectOption {
+  id: string;
+  name: string;
 }
 
 interface DatabaseData {
@@ -60,6 +66,8 @@ export default function DatabasePage() {
   }>();
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rowPaneOpenedFromParent = useRef(false);
 
   const {
     firebaseUser,
@@ -110,6 +118,15 @@ export default function DatabasePage() {
   const [savingProperty, setSavingProperty] =
     useState(false);
 
+  const [optionName, setOptionName] =
+    useState("");
+
+  const [editingOptionId, setEditingOptionId] =
+    useState<string | null>(null);
+
+  const [editingOptionName, setEditingOptionName] =
+    useState("");
+
   /*
    * Authentication
    */
@@ -138,21 +155,11 @@ export default function DatabasePage() {
       return;
     }
 
-    async function loadDatabase() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const databaseRef = doc(
-          db,
-          "databases",
-          databaseId
-        );
-
-        const snapshot =
-          await getDoc(databaseRef);
-
+    const unsubscribe = onSnapshot(
+      doc(db, "databases", databaseId),
+      (snapshot) => {
         if (!snapshot.exists()) {
+          setDatabase(null);
           setError("Database not found.");
           setLoading(false);
           return;
@@ -161,43 +168,24 @@ export default function DatabasePage() {
         const data = snapshot.data();
 
         setDatabase({
-          name:
-            data.name ||
-            "Untitled database",
-
-          description:
-            data.description || "",
-
-          workspaceId:
-            data.workspaceId,
-
-          createdBy:
-            data.createdBy,
-
-          properties:
-            data.properties || [
-              {
-                id: "title",
-                name: "Name",
-                type: "title",
-              },
-            ],
+          name: data.name || "Untitled database",
+          description: data.description || "",
+          workspaceId: data.workspaceId,
+          createdBy: data.createdBy,
+          properties: (data.properties as DatabaseProperty[] | undefined) || [
+            { id: "title", name: "Name", type: "title" },
+          ],
         });
-      } catch (error) {
-        console.error(
-          "Failed to load database:",
-          error
-        );
-
-        setError(
-          "Database could not be loaded."
-        );
-      } finally {
+        setLoading(false);
+      },
+      (listenerError) => {
+        console.error("Failed to load database:", listenerError);
+        setError("Database could not be loaded.");
         setLoading(false);
       }
-    }
+    );
 
-    loadDatabase();
+    return unsubscribe;
   }, [
     authLoading,
     firebaseUser,
@@ -548,6 +536,9 @@ export default function DatabasePage() {
     setEditPropertyType(
       property.type
     );
+    setOptionName("");
+    setEditingOptionId(null);
+    setEditingOptionName("");
   }
 
   /*
@@ -574,6 +565,10 @@ export default function DatabasePage() {
 
         type:
           propertyType,
+
+        ...(propertyType === "select"
+          ? { options: [] }
+          : {}),
       };
 
     const newProperties = [
@@ -661,6 +656,11 @@ export default function DatabasePage() {
                 property.type === "title"
                   ? "title"
                   : editPropertyType,
+
+              options:
+                editPropertyType === "select"
+                  ? property.options || []
+                  : property.options,
             };
           }
         );
@@ -699,6 +699,124 @@ export default function DatabasePage() {
     } finally {
       setSavingProperty(false);
     }
+  }
+
+  async function saveSelectOptions(
+    propertyId: string,
+    options: SelectOption[]
+  ) {
+    if (!database || savingProperty) {
+      return;
+    }
+
+    try {
+      setSavingProperty(true);
+      setError("");
+
+      const newProperties = database.properties.map(
+        (property) =>
+          property.id === propertyId
+            ? { ...property, options }
+            : property
+      );
+
+      await updateDoc(
+        doc(db, "databases", databaseId),
+        {
+          properties: newProperties,
+          updatedAt: serverTimestamp(),
+        }
+      );
+
+      setDatabase({ ...database, properties: newProperties });
+      setEditingProperty((current) =>
+        current?.id === propertyId
+          ? { ...current, options }
+          : current
+      );
+    } catch (saveError) {
+      console.error("Failed to update Select options:", saveError);
+      setError("Select options could not be saved.");
+    } finally {
+      setSavingProperty(false);
+    }
+  }
+
+  async function addSelectOption() {
+    if (!editingProperty || editingProperty.type !== "select") {
+      return;
+    }
+
+    const name = optionName.trim();
+    const options = editingProperty.options || [];
+
+    if (!name) {
+      setError("Option names cannot be blank.");
+      return;
+    }
+
+    if (options.some((option) => option.name.toLowerCase() === name.toLowerCase())) {
+      setError("Option names must be unique.");
+      return;
+    }
+
+    await saveSelectOptions(editingProperty.id, [
+      ...options,
+      { id: crypto.randomUUID(), name },
+    ]);
+    setOptionName("");
+  }
+
+  async function renameSelectOption(option: SelectOption) {
+    if (!editingProperty || editingProperty.type !== "select") {
+      return;
+    }
+
+    const name = editingOptionName.trim();
+    const options = editingProperty.options || [];
+
+    if (!name) {
+      setError("Option names cannot be blank.");
+      return;
+    }
+
+    if (options.some((candidate) => candidate.id !== option.id && candidate.name.toLowerCase() === name.toLowerCase())) {
+      setError("Option names must be unique.");
+      return;
+    }
+
+    await saveSelectOptions(
+      editingProperty.id,
+      options.map((candidate) =>
+        candidate.id === option.id ? { ...candidate, name } : candidate
+      )
+    );
+    setEditingOptionId(null);
+    setEditingOptionName("");
+  }
+
+  async function deleteSelectOption(option: SelectOption) {
+    if (!editingProperty || editingProperty.type !== "select") {
+      return;
+    }
+
+    const usedBy = rows.filter(
+      (row) => row.values[editingProperty.id] === option.id
+    ).length;
+
+    if (usedBy > 0) {
+      setError(
+        `"${option.name}" is in use by ${usedBy} row${usedBy === 1 ? "" : "s"}. Clear or reassign it before deleting.`
+      );
+      return;
+    }
+
+    await saveSelectOptions(
+      editingProperty.id,
+      (editingProperty.options || []).filter(
+        (candidate) => candidate.id !== option.id
+      )
+    );
   }
 
   /*
@@ -875,14 +993,17 @@ export default function DatabasePage() {
       property.type ===
       "select"
     ) {
+      const stringValue =
+        typeof value === "string" ? value : "";
+      const options = property.options || [];
+      const matchingOption = options.find(
+        (option) => option.id === stringValue
+      );
+
       return (
-        <input
-          type="text"
-          value={
-            typeof value === "string"
-              ? value
-              : ""
-          }
+        <select
+          aria-label={`${property.name} for row ${row.id}`}
+          value={stringValue}
           onChange={(event) =>
             updateCell(
               row.id,
@@ -890,9 +1011,20 @@ export default function DatabasePage() {
               event.target.value
             )
           }
-          placeholder="Select..."
           className="h-full w-full bg-transparent px-3 py-2 text-sm outline-none"
-        />
+        >
+          <option value="">Select...</option>
+          {!matchingOption && stringValue && (
+            <option value={stringValue}>
+              {`Legacy: ${stringValue}`}
+            </option>
+          )}
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
       );
     }
 
@@ -993,18 +1125,20 @@ export default function DatabasePage() {
     );
   }
 
+  const selectedRow = rows.find((row) => row.id === searchParams.get("row")) ?? null;
+
   /*
    * Main UI
    */
 
   return (
-    <main className="flex min-h-screen bg-gray-50">
+    <main className="flex min-h-screen bg-[#fbfbfa]">
 
       <Sidebar />
 
       <section className="min-w-0 flex-1 overflow-hidden">
 
-        <div className="border-b border-gray-200 bg-white px-10 py-4">
+        <div className="border-b border-black/[0.09] bg-white/80 px-6 py-3 backdrop-blur md:px-10">
 
           <Link
             href={`/workspaces/${workspaceId}/databases`}
@@ -1015,7 +1149,7 @@ export default function DatabasePage() {
 
         </div>
 
-        <div className="px-10 py-10">
+        <div className="px-6 py-10 md:px-10">
 
           <div className="mx-auto max-w-[1500px]">
 
@@ -1027,9 +1161,9 @@ export default function DatabasePage() {
 
             {/* DATABASE HEADER */}
 
-            <div className="mb-8">
+            <div className="mb-7">
 
-              <div className="mb-4 text-5xl">
+              <div className="mb-3 text-4xl">
                 ▦
               </div>
 
@@ -1040,7 +1174,7 @@ export default function DatabasePage() {
                     event.target.value
                   )
                 }
-                className="w-full border-none bg-transparent text-4xl font-bold tracking-tight text-gray-900 outline-none"
+                className="w-full border-none bg-transparent text-4xl font-bold tracking-[-0.03em] text-[#37352f] outline-none placeholder:text-[#b4b3af]"
                 placeholder="Untitled database"
               />
 
@@ -1053,7 +1187,7 @@ export default function DatabasePage() {
                     event.target.value
                   )
                 }
-                className="mt-3 w-full border-none bg-transparent text-sm text-gray-500 outline-none"
+                className="mt-2 w-full border-none bg-transparent text-sm text-[#787774] outline-none placeholder:text-[#9b9a97]"
                 placeholder="Add a description..."
               />
 
@@ -1061,47 +1195,20 @@ export default function DatabasePage() {
 
             {/* TOOLBAR */}
 
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between border-b border-black/[0.09]">
 
               <div className="flex items-center gap-2">
 
-                <button
-                  type="button"
-                  className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700"
-                >
-                  Table
-                </button>
-
-                <button
-                  type="button"
-                  className="rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100"
-                >
-                  + Add view
-                </button>
+                <span className="border-b-2 border-[#37352f] px-3 py-2 text-sm font-medium text-[#37352f]">▦ Table</span>
 
               </div>
 
-              <div className="flex items-center gap-2">
-
-                <button
-                  type="button"
-                  className="rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100"
-                >
-                  Filter
-                </button>
-
-                <button
-                  type="button"
-                  className="rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100"
-                >
-                  Sort
-                </button>
-
+              <div className="flex items-center gap-2 pb-1">
                 <button
                   type="button"
                   onClick={createRow}
                   disabled={creatingRow}
-                  className="rounded-md bg-gray-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="rounded-md bg-[#252525] px-3 py-1.5 text-sm font-medium text-white transition hover:bg-black disabled:opacity-50"
                 >
                   {creatingRow
                     ? "Adding..."
@@ -1114,20 +1221,20 @@ export default function DatabasePage() {
 
             {/* TABLE */}
 
-            <div className="overflow-x-auto border border-gray-200 bg-white">
+            <div className="overflow-x-auto rounded-md border border-black/[0.12] bg-white">
 
               <table className="min-w-full border-collapse">
 
                 <thead>
 
-                  <tr className="bg-gray-50">
+                  <tr className="bg-[#fbfbfa]">
 
                     {database.properties.map(
                       (property) => (
 
                         <th
                           key={property.id}
-                          className="min-w-[220px] border-b border-r border-gray-200 px-3 py-2 text-left text-xs font-medium text-gray-500"
+                          className="min-w-[190px] border-b border-r border-black/[0.09] px-2 py-1.5 text-left text-xs font-medium text-[#787774]"
                         >
 
                           <button
@@ -1137,7 +1244,7 @@ export default function DatabasePage() {
                                 property
                               )
                             }
-                            className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-gray-100"
+                            className="flex w-full items-center gap-2 rounded px-1 py-1 text-left transition hover:bg-black/[0.05]"
                             title={`Edit ${property.name}`}
                           >
 
@@ -1178,7 +1285,7 @@ export default function DatabasePage() {
                       )
                     )}
 
-                    <th className="w-12 border-b border-gray-200">
+                    <th className="w-12 border-b border-black/[0.09]">
 
                       <button
                         type="button"
@@ -1187,7 +1294,7 @@ export default function DatabasePage() {
                             true
                           )
                         }
-                        className="flex h-full w-full items-center justify-center px-4 py-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900"
+                        className="flex h-full w-full items-center justify-center px-4 py-2 text-[#9b9a97] hover:bg-black/[0.05] hover:text-[#37352f]"
                         title="Add property"
                       >
                         +
@@ -1206,7 +1313,7 @@ export default function DatabasePage() {
 
                       <tr
                         key={row.id}
-                        className="group hover:bg-gray-50"
+                        className="group transition hover:bg-[#f7f7f5]"
                       >
 
                         {database.properties.map(
@@ -1216,7 +1323,7 @@ export default function DatabasePage() {
                               key={
                                 property.id
                               }
-                              className="h-10 border-b border-r border-gray-200 p-0"
+                              className="h-9 border-b border-r border-black/[0.09] p-0"
                             >
 
                               {property.type ===
@@ -1232,7 +1339,8 @@ export default function DatabasePage() {
                                   </div>
 
                                   <Link
-                                    href={`/workspaces/${workspaceId}/databases/${databaseId}/rows/${row.id}`}
+                                    href={`/workspaces/${workspaceId}/databases/${databaseId}?row=${row.id}`}
+                                    onClick={() => { rowPaneOpenedFromParent.current = true; }}
                                     className="mr-2 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-900"
                                     title="Open row"
                                   >
@@ -1255,7 +1363,7 @@ export default function DatabasePage() {
                           )
                         )}
 
-                        <td className="border-b border-gray-200 text-center">
+                        <td className="border-b border-black/[0.09] text-center">
 
                           <button
                             type="button"
@@ -1285,7 +1393,7 @@ export default function DatabasePage() {
                         database.properties
                           .length + 1
                       }
-                      className="border-b border-gray-200"
+                      className="border-b border-black/[0.09]"
                     >
 
                       <button
@@ -1338,6 +1446,7 @@ export default function DatabasePage() {
 
               <button
                 type="button"
+                aria-label="Close new property dialog"
                 onClick={() =>
                   setAddingProperty(
                     false
@@ -1482,6 +1591,7 @@ export default function DatabasePage() {
 
               <button
                 type="button"
+                aria-label="Close property editor"
                 onClick={() =>
                   setEditingProperty(
                     null
@@ -1585,6 +1695,98 @@ export default function DatabasePage() {
 
             </div>
 
+            {editingProperty.type === "select" && (
+              <div className="mt-5 border-t border-gray-100 pt-5">
+                <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-gray-400">
+                  Options
+                </label>
+
+                <div className="space-y-2">
+                  {(editingProperty.options || []).map((option) => (
+                    <div
+                      key={option.id}
+                      className="flex items-center gap-2 rounded-lg border border-gray-200 px-2 py-1.5"
+                    >
+                      {editingOptionId === option.id ? (
+                        <input
+                          aria-label={`Rename ${option.name}`}
+                          value={editingOptionName}
+                          onChange={(event) =>
+                            setEditingOptionName(event.target.value)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              renameSelectOption(option);
+                            }
+                          }}
+                          className="min-w-0 flex-1 bg-transparent px-1 text-sm outline-none"
+                        />
+                      ) : (
+                        <span className="min-w-0 flex-1 truncate px-1 text-sm text-gray-700">
+                          {option.name}
+                        </span>
+                      )}
+
+                      {editingOptionId === option.id ? (
+                        <button
+                          type="button"
+                          aria-label={`Save ${option.name}`}
+                          onClick={() => renameSelectOption(option)}
+                          className="px-1 text-xs text-gray-600 hover:text-gray-900"
+                        >
+                          Save
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label={`Rename ${option.name}`}
+                          onClick={() => {
+                            setEditingOptionId(option.id);
+                            setEditingOptionName(option.name);
+                          }}
+                          className="px-1 text-xs text-gray-500 hover:text-gray-900"
+                        >
+                          Rename
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        aria-label={`Delete ${option.name}`}
+                        onClick={() => deleteSelectOption(option)}
+                        className="px-1 text-xs text-red-500 hover:text-red-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <input
+                    aria-label="Option name"
+                    value={optionName}
+                    onChange={(event) => setOptionName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        addSelectOption();
+                      }
+                    }}
+                    placeholder="Add an option"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
+                  />
+                  <button
+                    type="button"
+                    disabled={savingProperty}
+                    onClick={addSelectOption}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    Add option
+                  </button>
+                </div>
+              </div>
+            )}
+
             {editingProperty.type ===
               "title" && (
 
@@ -1662,6 +1864,7 @@ export default function DatabasePage() {
 
       )}
 
+      {selectedRow && <aside aria-label="Row detail pane" className="fixed inset-y-0 right-0 z-20 w-full max-w-[52vw] overflow-y-auto border-l border-black/[0.1] bg-white px-6 py-5 shadow-sm"><div className="flex items-center justify-between"><button aria-label="Close row pane" onClick={() => { if (rowPaneOpenedFromParent.current) { rowPaneOpenedFromParent.current = false; router.back(); } else { router.push(`/workspaces/${workspaceId}/databases/${databaseId}`); } }} className="text-sm text-[#787774]">× Close</button><Link aria-label="Expand row" href={`/workspaces/${workspaceId}/databases/${databaseId}/rows/${selectedRow.id}`} className="text-sm text-[#787774]">↗ Expand</Link></div><h2 className="mt-8 text-3xl font-semibold">{String(selectedRow.values.title || "Untitled")}</h2><div className="mt-6 border-y border-black/[0.08] py-2">{database.properties.filter((property) => property.type !== "title").map((property) => <div key={property.id} className="flex min-h-10 items-center"><span className="w-40 shrink-0 text-sm text-[#787774]">{property.name}</span><div className="min-w-0 flex-1">{renderCell(selectedRow, property)}</div></div>)}</div><Comments workspaceId={workspaceId} entityType="database-row" entityId={`${databaseId}:${selectedRow.id}`} /></aside>}
     </main>
   );
 }

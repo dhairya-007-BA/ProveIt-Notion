@@ -1,8 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fbfbfa;
+  --foreground: #37352f;
+  --surface: #ffffff;
+  --sidebar: #f7f7f5;
+  --hover: #efefed;
+  --active: #e9e9e6;
+  --border: rgba(55, 53, 47, 0.14);
+  --muted: #787774;
+  --subtle: #9b9a97;
+  --accent: #252525;
+  --danger: #d44c47;
 }
 
 @theme inline {
@@ -12,15 +21,66 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: #d9e9ff;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--subtle);
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #7ba8d8;
+  outline-offset: 2px;
+}
+
+.proveit-page {
+  background: var(--background);
+}
+
+.proveit-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.proveit-control {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.proveit-control:hover {
+  background: var(--hover);
+}
+
+table input,
+table select {
+  border-radius: 3px;
+  transition: background-color 120ms ease;
+}
+
+table input:hover,
+table select:hover,
+table input:focus,
+table select:focus {
+  background: #f1f1ef !important;
 }
