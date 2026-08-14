@@ -1,8 +1,52 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8f8f7;
+  --foreground: #292927;
+  --surface: #ffffff;
+  --sidebar: #f4f4f2;
+  --hover: #ececea;
+  --active: #e7e7e4;
+  --selected: #e7f0fb;
+  --border: rgba(41, 41, 39, 0.13);
+  --border-strong: rgba(41, 41, 39, 0.2);
+  --muted: #696965;
+  --subtle: #8d8d88;
+  --accent: #1f2937;
+  --accent-proveit-blue: #3b82c4;
+  --accent-teal: #168b86;
+  --accent-orange: #d97732;
+  --accent-charcoal: #292927;
+  --tag-gray-bg: #eef1f5;
+  --tag-gray-fg: #4d5560;
+  --tag-blue-bg: #e5f0fb;
+  --tag-blue-fg: #2563a5;
+  --tag-teal-bg: #dff4f1;
+  --tag-teal-fg: #13736e;
+  --tag-green-bg: #e4f4e8;
+  --tag-green-fg: #237a42;
+  --tag-yellow-bg: #fff3cc;
+  --tag-yellow-fg: #956a00;
+  --tag-orange-bg: #fff0df;
+  --tag-orange-fg: #b45309;
+  --tag-red-bg: #fce8e7;
+  --tag-red-fg: #ba3631;
+  --tag-purple-bg: #f0e9fb;
+  --tag-purple-fg: #7046a4;
+  --tag-pink-bg: #fce8f1;
+  --tag-pink-fg: #ad3d72;
+  --danger: #d44c47;
+  --focus: #3b82c4;
+  --status-neutral-bg: #eef1f5;
+  --status-neutral-fg: #455468;
+  --status-positive-bg: #eaf6ed;
+  --status-positive-fg: #256b3c;
+  --status-warning-bg: #fbf2dd;
+  --status-warning-fg: #805d16;
+  --status-danger-bg: #f9e8e7;
+  --status-danger-fg: #9a3731;
+  --shadow-sm: 0 1px 2px rgba(28, 28, 26, 0.04), 0 1px 3px rgba(28, 28, 26, 0.03);
+  --shadow-md: 0 12px 30px rgba(28, 28, 26, 0.08), 0 2px 8px rgba(28, 28, 26, 0.04);
 }
 
 @theme inline {
@@ -12,15 +56,235 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #d9e9ff;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--subtle);
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #7ba8d8;
+  outline-offset: 2px;
+}
+
+.proveit-page {
+  background: var(--background);
+}
+
+.proveit-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.proveit-content {
+  min-width: 0;
+  flex: 1;
+  padding: 2rem 2.5rem 3rem;
+}
+
+.proveit-content-inner {
+  margin-inline: auto;
+  max-width: 76rem;
+}
+
+.proveit-back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.proveit-back-link:hover {
+  background: var(--hover);
+  color: var(--foreground);
+}
+
+.proveit-page-header {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.proveit-page-title {
+  font-size: clamp(2.125rem, 3vw, 3rem);
+  font-weight: 670;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.proveit-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.proveit-label {
+  color: var(--subtle);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.proveit-primary-button {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 580;
+  padding: 0.55rem 0.9rem;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.16);
+  transition: background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.proveit-primary-button:hover {
+  background: #111827;
+  box-shadow: 0 3px 8px rgba(17, 24, 39, 0.2);
+}
+
+.proveit-primary-button:active {
+  transform: translateY(1px);
+}
+
+.proveit-secondary-button {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  padding: 0.55rem 0.8rem;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.proveit-secondary-button:hover {
+  background: var(--hover);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.proveit-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.proveit-list-row {
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.proveit-list-row:hover {
+  background: #fafafa;
+}
+
+.proveit-side-pane {
+  background: var(--surface);
+  box-shadow: -12px 0 30px rgba(28, 28, 26, 0.04);
+}
+
+.proveit-priority {
+  border-radius: 4px;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.25rem 0.4rem;
+  text-transform: capitalize;
+}
+
+.proveit-priority-low {
+  background: #edf5ee;
+  color: #356341;
+}
+
+.proveit-priority-medium {
+  background: #f6f0dd;
+  color: #755b24;
+}
+
+.proveit-priority-high,
+.proveit-priority-urgent {
+  background: #f9e6e4;
+  color: #963b35;
+}
+
+.proveit-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.proveit-status-scheduled { background: var(--status-neutral-bg); color: var(--status-neutral-fg); }
+.proveit-status-in_progress { background: var(--status-warning-bg); color: var(--status-warning-fg); }
+.proveit-status-completed { background: var(--status-positive-bg); color: var(--status-positive-fg); }
+.proveit-status-cancelled { background: var(--status-danger-bg); color: var(--status-danger-fg); }
+
+.proveit-control {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.proveit-control:hover {
+  background: var(--hover);
+}
+
+table input,
+table select {
+  border-radius: 3px;
+  transition: background-color 120ms ease;
+}
+
+table input:hover,
+table select:hover,
+table input:focus,
+table select:focus {
+  background: #f1f1ef !important;
+}
+
+@media (max-width: 1024px) {
+  .proveit-content { padding: 1.5rem 2rem 2.5rem; }
+}
+
+@media (max-width: 767px) {
+  .proveit-content { padding: 1.25rem 1rem 2rem; }
 }

@@ -12,6 +12,8 @@ import {
   ProveItUser,
 } from "@/types/user";
 
+import { authenticatedRequest } from "@/lib/authenticated-request";
+
 interface ResetPasswordFormProps {
   employee: ProveItUser;
   currentUser: User;
@@ -51,18 +53,12 @@ export default function ResetPasswordForm({
       setError("");
       setCopied(false);
 
-      const idToken =
-        await currentUser.getIdToken();
-
-      const response = await fetch(
+      const response = await authenticatedRequest(
+        currentUser,
         `/api/admin/employees/${employee.uid}/password`,
         {
           method: "PATCH",
 
-          headers: {
-            Authorization:
-              `Bearer ${idToken}`,
-          },
         }
       );
 

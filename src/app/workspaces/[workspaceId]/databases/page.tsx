@@ -332,18 +332,18 @@ export default function DatabasesPage() {
   }
 
   return (
-    <main className="flex min-h-screen bg-gray-50">
+    <main className="flex min-h-screen bg-[var(--background)]">
       <Sidebar />
 
-      <section className="flex-1 p-10">
-        <div className="mx-auto max-w-6xl">
+      <section className="proveit-content">
+        <div className="proveit-content-inner max-w-5xl">
 
           {/* BREADCRUMB */}
 
-          <div className="mb-8">
+          <div>
             <Link
               href={`/workspaces/${workspaceId}`}
-              className="text-sm text-gray-500 hover:text-gray-900"
+              className="proveit-back-link px-1"
             >
               ← Back to workspace
             </Link>
@@ -351,18 +351,15 @@ export default function DatabasesPage() {
 
           {/* HEADER */}
 
-          <div className="mb-8 flex items-start justify-between">
+          <div className="proveit-page-header mb-8">
 
             <div>
-              <p className="mb-2 text-sm font-medium text-gray-400">
-                Workspace
-              </p>
-
-              <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+              <p className="proveit-label mb-2">DATABASES</p>
+              <h1 className="proveit-page-title">
                 Databases
               </h1>
 
-              <p className="mt-2 text-sm text-gray-500">
+              <p className="mt-2 text-sm text-[#787774]">
                 Create databases to organize structured information.
               </p>
             </div>
@@ -373,7 +370,7 @@ export default function DatabasesPage() {
               onClick={
                 createDatabase
               }
-              className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50"
             >
               {creating
                 ? "Creating..."
@@ -392,7 +389,7 @@ export default function DatabasesPage() {
 
           {/* DATABASE LIST */}
 
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+          <div className="proveit-list">
 
             {databases.length ===
             0 ? (
@@ -435,27 +432,27 @@ export default function DatabasesPage() {
                     key={
                       database.id
                     }
-                    className="flex items-center border-b border-gray-100 last:border-b-0"
+                    className="proveit-list-row group flex items-center border-b border-black/[0.08] last:border-b-0"
                   >
 
                     <Link
                       href={`/workspaces/${workspaceId}/databases/${database.id}`}
-                      className="flex min-w-0 flex-1 items-center gap-4 px-6 py-5 transition hover:bg-gray-50"
+                      className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3"
                     >
 
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-lg">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--sidebar)] text-base">
                         ▦
                       </div>
 
                       <div className="min-w-0">
 
-                        <p className="truncate font-medium text-gray-900">
+                        <p className="truncate text-sm font-medium text-[#37352f]">
                           {
                             database.name
                           }
                         </p>
 
-                        <p className="mt-1 text-xs text-gray-400">
+                        <p className="mt-0.5 text-xs text-[#9b9a97]">
                           {database.updatedAt
                             ? `Updated ${database.updatedAt.toLocaleDateString()}`
                             : "No update date"}
@@ -465,7 +462,7 @@ export default function DatabasesPage() {
 
                     </Link>
 
-                    <div className="flex items-center gap-4 px-6">
+                    <div className="flex items-center gap-3 px-4">
 
                       <button
                         type="button"

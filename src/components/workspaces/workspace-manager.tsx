@@ -45,7 +45,26 @@ export default function WorkspaceManager() {
   }
 
   useEffect(() => {
-    loadWorkspaces();
+    let current = true;
+
+    void getWorkspaces()
+      .then((data) => {
+        if (current) {
+          setWorkspaces(data);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load workspaces:", error);
+      })
+      .finally(() => {
+        if (current) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      current = false;
+    };
   }, []);
 
   async function handleCreateWorkspace() {
@@ -270,14 +289,18 @@ export default function WorkspaceManager() {
 
                 <div>
                   <div className="flex items-center gap-2">
-<Link
-  href={`/admin/workspaces/${workspace.id}`}
-  className="font-medium hover:underline"
->
-  {workspace.name}
-</Link>
+                    <Link
+                      href={`/admin/workspaces/${workspace.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      {workspace.name}
+                    </Link>
 
-                    {!workspace.active && (
+                    {workspace.deletedAt ? (
+                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-700">
+                        Deleted permanently
+                      </span>
+                    ) : !workspace.active && (
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
                         Archived
                       </span>
@@ -301,7 +324,9 @@ export default function WorkspaceManager() {
               </div>
 
               <div>
-                {workspace.active ? (
+                {workspace.deletedAt ? (
+                  <span className="text-sm text-gray-400">Tombstoned</span>
+                ) : workspace.active ? (
                   <button
                     onClick={() =>
                       handleArchive(workspace.id)

@@ -314,18 +314,18 @@ export default function DocumentsPage() {
   }
 
   return (
-    <main className="flex min-h-screen bg-gray-50">
+    <main className="flex min-h-screen bg-[var(--background)]">
       <Sidebar />
 
-      <section className="flex-1 p-10">
-        <div className="mx-auto max-w-6xl">
+      <section className="proveit-content">
+        <div className="proveit-content-inner">
 
           {/* BREADCRUMB */}
 
-          <div className="mb-8">
+          <div>
             <Link
               href={`/workspaces/${workspaceId}`}
-              className="text-sm text-gray-500 hover:text-gray-900"
+              className="proveit-back-link px-1"
             >
               ← Back to workspace
             </Link>
@@ -333,14 +333,14 @@ export default function DocumentsPage() {
 
           {/* HEADER */}
 
-          <div className="mb-8 flex items-start justify-between">
+          <div className="proveit-page-header mb-8">
 
             <div>
-              <p className="mb-2 text-sm font-medium text-gray-400">
-                Workspace
+              <p className="proveit-label mb-2">
+                Documents
               </p>
 
-              <h1 className="text-3xl font-semibold tracking-tight">
+              <h1 className="proveit-page-title">
                 Documents
               </h1>
 
@@ -354,7 +354,7 @@ export default function DocumentsPage() {
               type="button"
               disabled={creating}
               onClick={createDocument}
-              className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50"
             >
               {creating
                 ? "Creating..."
@@ -373,7 +373,7 @@ export default function DocumentsPage() {
 
           {/* DOCUMENTS */}
 
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+          <div className="proveit-list">
 
             {documents.length === 0 ? (
               <div className="px-6 py-16 text-center">
@@ -397,7 +397,7 @@ export default function DocumentsPage() {
                 (document) => (
                   <div
                     key={document.id}
-                    className="flex items-center justify-between border-b border-gray-100 px-6 py-5 transition hover:bg-gray-50 last:border-b-0"
+                    className="proveit-list-row flex items-center justify-between border-b border-gray-100 px-6 py-5 last:border-b-0"
                   >
 
                     {/* DOCUMENT LINK */}
@@ -407,13 +407,13 @@ export default function DocumentsPage() {
                       className="flex min-w-0 flex-1 items-center gap-4"
                     >
 
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--sidebar)]">
                         📄
                       </div>
 
                       <div className="min-w-0">
 
-                        <p className="truncate font-medium text-gray-900">
+                        <p className="truncate font-medium text-[var(--foreground)]">
                           {document.title}
                         </p>
 

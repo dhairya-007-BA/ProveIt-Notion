@@ -1,703 +1,100 @@
 "use client";
 
 import Link from "next/link";
-
-import {
-  useEffect,
-  useState,
-} from "react";
-
-import {
-  useParams,
-  useRouter,
-} from "next/navigation";
-
-import {
-  collection,
-  getDocs,
-  query,
-  where,
-} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import Sidebar from "@/components/sidebar";
 import NewTaskForm from "@/components/tasks/new-task-form";
-
-import EditTaskForm, {
-  EditableTask,
-  EditableTaskPriority,
-  EditableTaskStatus,
-} from "@/components/tasks/edit-task-form";
-
+import EditTaskForm, { EditableTask, EditableTaskStatus } from "@/components/tasks/edit-task-form";
 import { useAuth } from "@/components/auth-provider";
-
 import { db } from "@/lib/firebase";
-import { getUsers } from "@/lib/users";
 
-import { ProveItUser } from "@/types/user";
-
-type WorkspaceTask =
-  EditableTask;
+const columns: { status: EditableTaskStatus; label: string }[] = [
+  { status: "todo", label: "Not started" },
+  { status: "in_progress", label: "In progress" },
+  { status: "blocked", label: "Blocked" },
+  { status: "done", label: "Done" },
+];
 
 export default function TasksPage() {
-  const params =
-    useParams<{
-      workspaceId: string;
-    }>();
-
-  const router =
-    useRouter();
-
-  const {
-    firebaseUser,
-    profile,
-    loading: authLoading,
-  } = useAuth();
-
-  const workspaceId =
-    params.workspaceId;
-
-  const [tasks, setTasks] =
-    useState<WorkspaceTask[]>([]);
-
-  const [users, setUsers] =
-    useState<ProveItUser[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  const [
-    creatingTask,
-    setCreatingTask,
-  ] = useState(false);
-
-  const [
-    selectedTask,
-    setSelectedTask,
-  ] =
-    useState<WorkspaceTask | null>(
-      null
-    );
-
-  async function loadTasks() {
-    if (
-      !firebaseUser ||
-      !profile ||
-      !workspaceId
-    ) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError("");
-
-      const tasksQuery =
-        query(
-          collection(
-            db,
-            "tasks"
-          ),
-          where(
-            "workspaceId",
-            "==",
-            workspaceId
-          )
-        );
-
-      const [
-        snapshot,
-        userData,
-      ] = await Promise.all([
-        getDocs(tasksQuery),
-        getUsers(),
-      ]);
-
-      const results =
-        snapshot.docs.map(
-          (taskSnapshot) => {
-            const data =
-              taskSnapshot.data();
-
-            return {
-              id:
-                taskSnapshot.id,
-
-              title:
-                data.title ||
-                "Untitled task",
-
-              description:
-                data.description ||
-                "",
-
-              workspaceId:
-                data.workspaceId,
-
-              status:
-                (data.status ||
-                  "todo") as EditableTaskStatus,
-
-              priority:
-                (data.priority ||
-                  "medium") as EditableTaskPriority,
-
-              assigneeId:
-                data.assigneeId ||
-                null,
-
-              dueDate:
-                data.dueDate
-                  ?.toDate(),
-
-              createdBy:
-                data.createdBy ||
-                "",
-
-              createdAt:
-                data.createdAt
-                  ?.toDate(),
-
-              updatedAt:
-                data.updatedAt
-                  ?.toDate(),
-            } as WorkspaceTask;
-          }
-        );
-
-      setTasks(results);
-      setUsers(userData);
-
-      /*
-       * If a task is currently open
-       * in the editor, refresh its
-       * local version too.
-       */
-      setSelectedTask(
-        (currentTask) => {
-          if (!currentTask) {
-            return null;
-          }
-
-          return (
-            results.find(
-              (task) =>
-                task.id ===
-                currentTask.id
-            ) || null
-          );
-        }
-      );
-    } catch (error) {
-      console.error(
-        "Failed to load tasks:",
-        error
-      );
-
-      setError(
-        "Tasks could not be loaded."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { workspaceId } = useParams<{ workspaceId: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { firebaseUser, profile, loading: authLoading } = useAuth();
+  const [tasks, setTasks] = useState<EditableTask[]>([]);
+  const [view, setView] = useState<"table" | "board">("table");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const selected = tasks.find((task) => task.id === searchParams.get("task")) ?? null;
 
   useEffect(() => {
-    if (
-      !authLoading &&
-      !firebaseUser
-    ) {
-      router.replace(
-        "/login"
-      );
-    }
-  }, [
-    authLoading,
-    firebaseUser,
-    router,
-  ]);
+    if (!authLoading && !firebaseUser) router.replace("/login");
+  }, [authLoading, firebaseUser, router]);
 
   useEffect(() => {
-    if (
-      authLoading ||
-      !firebaseUser ||
-      !profile ||
-      !workspaceId
-    ) {
-      return;
-    }
-
-    loadTasks();
-  }, [
-    authLoading,
-    firebaseUser,
-    profile,
-    workspaceId,
-  ]);
-
-  if (
-    authLoading ||
-    loading
-  ) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-500">
-          Loading tasks...
-        </p>
-      </main>
-    );
-  }
-
-  if (
-    !firebaseUser ||
-    !profile
-  ) {
-    return null;
-  }
-
-  const todoTasks =
-    tasks.filter(
-      (task) =>
-        task.status === "todo"
-    );
-
-  const inProgressTasks =
-    tasks.filter(
-      (task) =>
-        task.status ===
-        "in_progress"
-    );
-
-  const blockedTasks =
-    tasks.filter(
-      (task) =>
-        task.status ===
-        "blocked"
-    );
-
-  const doneTasks =
-    tasks.filter(
-      (task) =>
-        task.status === "done"
-    );
-
-  function openTask(
-    task: WorkspaceTask
-  ) {
-    setCreatingTask(false);
-    setSelectedTask(task);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
+    if (!firebaseUser || !profile || !workspaceId) return;
+    return onSnapshot(query(collection(db, "tasks"), where("workspaceId", "==", workspaceId)), (snapshot) => {
+      setTasks(snapshot.docs.map((item) => {
+        const value = item.data();
+        return {
+          id: item.id,
+          title: value.title || "Untitled task",
+          description: value.description || "",
+          workspaceId: value.workspaceId,
+          status: value.status || "todo",
+          priority: value.priority || "medium",
+          assigneeId: value.assigneeId || null,
+          dueDate: value.dueDate?.toDate(),
+          createdBy: value.createdBy || "",
+          createdAt: value.createdAt?.toDate(),
+          updatedAt: value.updatedAt?.toDate(),
+        } as EditableTask;
+      }).filter((_, index) => snapshot.docs[index].data().archived !== true));
+    }, (listenerError) => {
+      console.error("Failed to listen for tasks:", listenerError);
+      setError("Tasks could not be loaded.");
     });
-  }
+  }, [firebaseUser, profile, workspaceId]);
 
-  function getAssigneeName(
-    assigneeId?: string | null
-  ) {
-    if (!assigneeId) {
-      return null;
+  async function moveTask(taskId: string, status: EditableTaskStatus) {
+    const previous = tasks.find((task) => task.id === taskId);
+    if (!previous || previous.status === status) return;
+    setError("");
+    setTasks((current) => current.map((task) => task.id === taskId ? { ...task, status } : task));
+    try {
+      await updateDoc(doc(db, "tasks", taskId), { status, updatedAt: serverTimestamp() });
+    } catch (moveError) {
+      console.error("Failed to move task:", moveError);
+      setTasks((current) => current.map((task) => task.id === taskId ? previous : task));
+      setError("Task status could not be saved. The change was reverted.");
     }
-
-    const user =
-      users.find(
-        (candidate) =>
-          candidate.uid ===
-          assigneeId
-      );
-
-    return (
-      user?.name ||
-      "Unknown employee"
-    );
   }
 
-  return (
-    <main className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+  function openTask(task: EditableTask) {
+    router.push(`/workspaces/${workspaceId}/tasks?task=${task.id}`);
+  }
 
-      <section className="min-w-0 flex-1 p-10">
-        <div className="mx-auto max-w-7xl">
+  function closeTask() {
+    router.push(`/workspaces/${workspaceId}/tasks`);
+  }
 
-          {/* BACK */}
+  if (authLoading || (!profile && firebaseUser)) return <main className="grid min-h-screen place-items-center text-sm text-[var(--muted)]">Loading tasks…</main>;
+  if (!firebaseUser || !profile) return null;
 
-          <div className="mb-8">
-            <Link
-              href={`/workspaces/${workspaceId}`}
-              className="text-sm text-gray-500 hover:text-gray-900"
-            >
-              ← Back to workspace
-            </Link>
-          </div>
-
-          {/* HEADER */}
-
-          <div className="mb-8 flex items-start justify-between">
-            <div>
-              <p className="mb-2 text-sm font-medium text-gray-400">
-                Workspace
-              </p>
-
-              <h1 className="text-3xl font-semibold tracking-tight">
-                Tasks
-              </h1>
-
-              <p className="mt-2 text-sm text-gray-500">
-                Track work,
-                ownership,
-                priorities and
-                deadlines.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedTask(
-                  null
-                );
-
-                setCreatingTask(
-                  true
-                );
-              }}
-              disabled={
-                creatingTask
-              }
-              className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              + New task
-            </button>
-          </div>
-
-          {/* NEW TASK */}
-
-          {creatingTask && (
-            <NewTaskForm
-              workspaceId={
-                workspaceId
-              }
-              currentUser={
-                firebaseUser
-              }
-              onCancel={() =>
-                setCreatingTask(
-                  false
-                )
-              }
-              onCreated={async () => {
-                setCreatingTask(
-                  false
-                );
-
-                await loadTasks();
-              }}
-            />
-          )}
-
-          {/* EDIT TASK */}
-
-          {selectedTask && (
-            <EditTaskForm
-              key={
-                selectedTask.id
-              }
-              task={
-                selectedTask
-              }
-              onCancel={() =>
-                setSelectedTask(
-                  null
-                )
-              }
-              onSaved={async () => {
-                setSelectedTask(
-                  null
-                );
-
-                await loadTasks();
-              }}
-              onDeleted={async () => {
-                setSelectedTask(
-                  null
-                );
-
-                await loadTasks();
-              }}
-            />
-          )}
-
-          {/* ERROR */}
-
-          {error && (
-            <div className="mb-6 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          {/* SUMMARY */}
-
-          <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard
-              label="To do"
-              count={
-                todoTasks.length
-              }
-            />
-
-            <SummaryCard
-              label="In progress"
-              count={
-                inProgressTasks.length
-              }
-            />
-
-            <SummaryCard
-              label="Blocked"
-              count={
-                blockedTasks.length
-              }
-            />
-
-            <SummaryCard
-              label="Done"
-              count={
-                doneTasks.length
-              }
-            />
-          </div>
-
-          {/* BOARD */}
-
-          <div className="grid gap-5 xl:grid-cols-4">
-            <TaskColumn
-              title="To do"
-              tasks={todoTasks}
-              getAssigneeName={
-                getAssigneeName
-              }
-              onTaskClick={
-                openTask
-              }
-            />
-
-            <TaskColumn
-              title="In progress"
-              tasks={
-                inProgressTasks
-              }
-              getAssigneeName={
-                getAssigneeName
-              }
-              onTaskClick={
-                openTask
-              }
-            />
-
-            <TaskColumn
-              title="Blocked"
-              tasks={
-                blockedTasks
-              }
-              getAssigneeName={
-                getAssigneeName
-              }
-              onTaskClick={
-                openTask
-              }
-            />
-
-            <TaskColumn
-              title="Done"
-              tasks={doneTasks}
-              getAssigneeName={
-                getAssigneeName
-              }
-              onTaskClick={
-                openTask
-              }
-            />
-          </div>
-        </div>
-      </section>
-    </main>
-  );
+  return <main className="flex min-h-screen bg-[var(--background)]"><Sidebar /><section className="proveit-content"><div className={`mx-auto ${selected ? "max-w-none" : "max-w-[1400px]"}`}><Link href={`/workspaces/${workspaceId}`} className="proveit-back-link px-1">← Back to workspace</Link><header className="proveit-page-header"><div><p className="proveit-label">Tasks</p><h1 className="proveit-page-title mt-1">Tasks</h1></div><button onClick={() => setCreating(true)} className="proveit-primary-button">New task</button></header><div className="mt-8 flex border-b border-[var(--border)]"><ViewButton active={view === "table"} onClick={() => setView("table")}>▦ Table</ViewButton><ViewButton active={view === "board"} onClick={() => setView("board")}>▤ Board</ViewButton></div>{error && <p role="alert" className="mt-3 text-sm text-[var(--danger)]">{error}</p>}<div className={selected ? "grid min-w-0 grid-cols-1 min-[1351px]:grid-cols-[minmax(0,1fr)_minmax(400px,38%)]" : ""}><div className="min-w-0">{view === "table" ? <TaskTable tasks={tasks} onOpen={openTask} onStatus={moveTask} /> : <TaskBoard tasks={tasks} draggedId={draggedId} setDraggedId={setDraggedId} onDrop={moveTask} onOpen={openTask} />}</div>{selected && <aside aria-label="Task detail pane" className="proveit-side-pane min-h-[calc(100vh-10rem)] border-l border-[var(--border)] px-5 py-4 min-[1351px]:sticky min-[1351px]:top-0"><div className="sticky top-0 z-10 flex justify-between bg-[var(--surface)] pb-3"><button aria-label="Close task pane" onClick={closeTask} className="proveit-secondary-button">× Close</button><Link aria-label="Expand task" href={`/workspaces/${workspaceId}/tasks/${selected.id}`} className="proveit-secondary-button">↗ Expand</Link></div><div className="max-h-[calc(100vh-13rem)] overflow-y-auto pr-1"><EditTaskForm task={selected} onCancel={closeTask} onSaved={() => {}} onDeleted={closeTask} /></div></aside>}</div></div></section>{creating && <div role="dialog" aria-modal="true" aria-label="New task" className="fixed inset-0 z-50 grid place-items-start overflow-y-auto bg-black/20 px-4 py-8 sm:place-items-center"><div className="w-full max-w-2xl"><NewTaskForm workspaceId={workspaceId} currentUser={firebaseUser} onCancel={() => setCreating(false)} onCreated={() => setCreating(false)} /></div></div>}</main>;
 }
 
-function SummaryCard({
-  label,
-  count,
-}: {
-  label: string;
-  count: number;
-}) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <p className="text-sm text-gray-500">
-        {label}
-      </p>
-
-      <p className="mt-2 text-2xl font-semibold">
-        {count}
-      </p>
-    </div>
-  );
+function ViewButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <button onClick={onClick} className={`border-b-2 px-3 py-2 text-sm transition ${active ? "border-[var(--foreground)] font-medium" : "border-transparent text-[var(--muted)] hover:text-[var(--foreground)]"}`}>{children}</button>;
 }
 
-function TaskColumn({
-  title,
-  tasks,
-  getAssigneeName,
-  onTaskClick,
-}: {
-  title: string;
-
-  tasks: WorkspaceTask[];
-
-  getAssigneeName: (
-    assigneeId?: string | null
-  ) => string | null;
-
-  onTaskClick: (
-    task: WorkspaceTask
-  ) => void;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">
-          {title}
-        </h2>
-
-        <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600">
-          {tasks.length}
-        </span>
-      </div>
-
-      <div className="min-h-48 rounded-xl bg-gray-100 p-3">
-        {tasks.length === 0 ? (
-          <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-gray-300 p-5 text-center text-xs text-gray-400">
-            No tasks
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {tasks.map(
-              (task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  assigneeName={
-                    getAssigneeName(
-                      task.assigneeId
-                    )
-                  }
-                  onClick={() =>
-                    onTaskClick(
-                      task
-                    )
-                  }
-                />
-              )
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+function TaskTable({ tasks, onOpen, onStatus }: { tasks: EditableTask[]; onOpen: (task: EditableTask) => void; onStatus: (id: string, status: EditableTaskStatus) => void }) {
+  return <div className="proveit-list mt-5 overflow-x-auto"><table className="w-full min-w-[640px] text-sm"><thead className="border-b border-[var(--border)] bg-[#fafaf9] text-left text-xs font-medium text-[var(--muted)]"><tr><th className="px-4 py-3">Task</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Priority</th><th className="px-4 py-3">Due date</th></tr></thead><tbody>{tasks.map((task) => <tr key={task.id} className="border-b border-black/[0.07] transition last:border-b-0 hover:bg-[var(--hover)]"><td><button className="w-full px-4 py-3.5 text-left font-medium" onClick={() => onOpen(task)}>{task.title}</button></td><td className="px-4 py-2"><select aria-label={`Status for ${task.title}`} value={task.status} onChange={(event) => onStatus(task.id, event.target.value as EditableTaskStatus)} className="rounded-md bg-transparent px-2 py-1 capitalize hover:bg-white"><option value="todo">Not started</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="done">Done</option></select></td><td className="px-4 py-2"><span className={`proveit-priority proveit-priority-${task.priority}`}>{task.priority}</span></td><td className="px-4 py-2 text-[var(--muted)]">{task.dueDate?.toLocaleDateString() || "—"}</td></tr>)}</tbody></table>{tasks.length === 0 && <p className="px-4 py-10 text-sm text-[var(--muted)]">No tasks yet. Create the first task for this workspace.</p>}</div>;
 }
 
-function TaskCard({
-  task,
-  assigneeName,
-  onClick,
-}: {
-  task: WorkspaceTask;
-
-  assigneeName:
-    string | null;
-
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="block w-full rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:border-gray-300 hover:shadow-md"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium leading-5 text-gray-900">
-          {task.title}
-        </p>
-
-        <PriorityBadge
-          priority={
-            task.priority
-          }
-        />
-      </div>
-
-      {task.description && (
-        <p className="mt-2 line-clamp-3 text-xs leading-5 text-gray-500">
-          {task.description}
-        </p>
-      )}
-
-      <div className="mt-4 space-y-1">
-        {assigneeName && (
-          <p className="text-xs font-medium text-gray-600">
-            {assigneeName}
-          </p>
-        )}
-
-        {task.dueDate && (
-          <p className="text-xs text-gray-400">
-            Due{" "}
-            {task.dueDate.toLocaleDateString()}
-          </p>
-        )}
-
-        {!assigneeName &&
-          !task.dueDate && (
-            <p className="text-xs text-gray-400">
-              Unassigned
-            </p>
-          )}
-      </div>
-    </button>
-  );
-}
-
-function PriorityBadge({
-  priority,
-}: {
-  priority:
-    EditableTaskPriority;
-}) {
-  const styles: Record<
-    EditableTaskPriority,
-    string
-  > = {
-    low:
-      "bg-gray-100 text-gray-600",
-
-    medium:
-      "bg-blue-50 text-blue-700",
-
-    high:
-      "bg-amber-50 text-amber-700",
-
-    urgent:
-      "bg-red-50 text-red-700",
-  };
-
-  return (
-    <span
-      className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-medium capitalize ${styles[priority]}`}
-    >
-      {priority}
-    </span>
-  );
+function TaskBoard({ tasks, draggedId, setDraggedId, onDrop, onOpen }: { tasks: EditableTask[]; draggedId: string | null; setDraggedId: (id: string | null) => void; onDrop: (id: string, status: EditableTaskStatus) => void; onOpen: (task: EditableTask) => void }) {
+  return <div className="mt-5 flex gap-4 overflow-x-auto pb-4">{columns.map((column) => { const columnTasks = tasks.filter((task) => task.status === column.status); return <section aria-label={`${column.label} column`} key={column.status} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedId) onDrop(draggedId, column.status); setDraggedId(null); }} className="w-72 shrink-0 rounded-lg bg-[#f1f1ef] p-2"><header className="flex items-center justify-between px-1 py-2 text-sm font-medium"><span>{column.label}</span><span className="text-xs text-[var(--muted)]">{columnTasks.length}</span></header><div className="min-h-32 space-y-2">{columnTasks.map((task) => <button key={task.id} draggable onDragStart={() => setDraggedId(task.id)} onClick={() => onOpen(task)} className="block w-full rounded-md border border-black/[0.08] bg-white p-3 text-left shadow-[0_1px_1px_rgba(15,15,15,0.04)] transition hover:border-black/[0.16] hover:shadow-sm"><p className="text-sm font-medium">{task.title}</p><div className="mt-3 flex items-center justify-between gap-2"><span className={`proveit-priority proveit-priority-${task.priority}`}>{task.priority}</span>{task.dueDate && <span className="text-xs text-[var(--muted)]">{task.dueDate.toLocaleDateString()}</span>}</div></button>)}</div></section>; })}</div>;
 }

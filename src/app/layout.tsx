@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
+import { GlobalSearch } from "@/components/global-search";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ProveIt Internal Portal",
-  description: "Internal workspace for ProveIt Hiring Innovations",
+  title: "ProveIt Workspace",
+  description: "The internal workspace for ProveIt Hiring Innovations",
 };
 
 export default function RootLayout({
@@ -28,8 +29,8 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-screen flex-col bg-gray-50 font-sans text-gray-900">
-        <AuthProvider>{children}</AuthProvider>
+      <body className="flex min-h-screen flex-col bg-[#fbfbfa] font-sans text-[#37352f]">
+        <AuthProvider><GlobalSearch />{children}</AuthProvider>
       </body>
     </html>
   );

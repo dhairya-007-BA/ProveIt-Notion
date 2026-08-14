@@ -102,6 +102,8 @@ export default function WorkspacePage() {
           description:
             data.description,
           active: data.active,
+          deletedAt: data.deletedAt?.toDate(),
+          deletedBy: data.deletedBy,
           createdBy:
             data.createdBy,
           createdAt:
@@ -178,7 +180,8 @@ export default function WorkspacePage() {
 
   if (
     !workspace ||
-    !workspace.active
+    !workspace.active ||
+    workspace.deletedAt
   ) {
     return (
       <main className="flex min-h-screen bg-gray-50">
@@ -191,9 +194,9 @@ export default function WorkspacePage() {
             </h1>
 
             <p className="mt-2 text-sm text-gray-500">
-              This workspace does
-              not exist or has been
-              archived.
+              {workspace?.deletedAt
+                ? "This workspace was deleted permanently and is no longer available."
+                : "This workspace does not exist or has been archived."}
             </p>
           </div>
         </section>
@@ -202,36 +205,36 @@ export default function WorkspacePage() {
   }
 
   return (
-    <main className="flex min-h-screen bg-gray-50">
+    <main className="flex min-h-screen bg-[var(--background)]">
       <Sidebar />
 
-      <section className="flex-1 p-10">
-        <div className="mx-auto max-w-6xl">
+      <section className="proveit-content">
+        <div className="proveit-content-inner max-w-5xl">
 
           {/* WORKSPACE HEADER */}
 
           <div className="mb-10">
             <div className="flex items-center gap-4">
 
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-gray-200 bg-white text-3xl">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-2xl shadow-[var(--shadow-sm)]">
                 {workspace.icon ||
                   "📁"}
               </div>
 
               <div>
-                <p className="text-sm font-medium capitalize text-gray-400">
+                <p className="proveit-label capitalize">
                   {workspace.kind}{" "}
                   workspace
                 </p>
 
-                <h1 className="text-3xl font-semibold tracking-tight">
+                <h1 className="proveit-page-title mt-1">
                   {workspace.name}
                 </h1>
               </div>
             </div>
 
             {workspace.description && (
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-gray-500">
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted)]">
                 {
                   workspace.description
                 }
@@ -241,7 +244,14 @@ export default function WorkspacePage() {
 
           {/* WORKSPACE MODULES */}
 
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="max-w-5xl rounded-xl border border-[var(--border)] bg-white p-2 shadow-[var(--shadow-sm)] sm:grid sm:grid-cols-2 sm:gap-x-2">
+
+            <WorkspaceCard
+              href={`/workspaces/${workspaceId}/dashboard`}
+              icon="◫"
+              title="Dashboard"
+              description="Live overview of tasks, priorities, meetings, and activity."
+            />
 
             <WorkspaceCard
               href={`/workspaces/${workspaceId}/documents`}
@@ -299,27 +309,18 @@ function WorkspaceCard({
   return (
     <Link
       href={href}
-      className="group rounded-xl border border-gray-200 bg-white p-6 transition hover:border-gray-300 hover:shadow-sm"
+      className="group flex items-start gap-3 rounded-lg px-3 py-3.5 transition hover:bg-[var(--hover)]"
     >
-      <div className="flex items-start justify-between">
-
-        <div className="text-2xl">
-          {icon}
-        </div>
-
-        <span className="text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-gray-500">
-          →
-        </span>
-
+      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--sidebar)] text-lg">
+        {icon}
       </div>
-
-      <h2 className="mt-4 font-semibold">
-        {title}
-      </h2>
-
-      <p className="mt-2 text-sm leading-6 text-gray-500">
-        {description}
-      </p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium">{title}</h2>
+          <span className="text-[var(--subtle)] transition group-hover:translate-x-0.5">›</span>
+        </div>
+        <p className="mt-0.5 text-sm leading-5 text-[var(--muted)]">{description}</p>
+      </div>
     </Link>
   );
 }

@@ -23,6 +23,7 @@ import {
   auth,
   db,
 } from "@/lib/firebase";
+import { ProveItLogo } from "@/components/proveit-logo";
 
 function employeeIdToEmail(
   employeeId: string
@@ -181,19 +182,16 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-[#fbfbfa] px-4 py-10">
+      <div className="w-full max-w-sm rounded-xl border border-black/[0.12] bg-white p-8 shadow-[0_12px_40px_rgba(55,53,47,0.08)]">
 
         {/* HEADER */}
 
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-semibold">
-            ProveIt
-          </h1>
+          <ProveItLogo className="mx-auto h-12 w-12" priority />
+          <h1 className="mt-4 text-2xl font-semibold tracking-[-0.03em]">ProveIt</h1>
 
-          <p className="mt-2 text-gray-500">
-            Internal Employee Portal
-          </p>
+          <p className="mt-1 text-sm text-[#787774]">Sign in to your workspace</p>
         </div>
 
         {/* LOGIN FORM */}
@@ -208,7 +206,7 @@ export default function LoginPage() {
           <div>
             <label
               htmlFor="employeeId"
-              className="mb-2 block text-sm font-medium text-gray-700"
+              className="mb-1.5 block text-sm font-medium text-[#37352f]"
             >
               Employee ID
             </label>
@@ -225,7 +223,7 @@ export default function LoginPage() {
                 )
               }
               placeholder="Enter your employee ID"
-              className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none transition focus:border-gray-400"
+              className="w-full rounded-md border border-black/[0.15] px-3 py-2.5 text-sm outline-none transition focus:border-[#787774] focus:ring-2 focus:ring-black/[0.06]"
             />
           </div>
 
@@ -234,7 +232,7 @@ export default function LoginPage() {
           <div>
             <label
               htmlFor="password"
-              className="mb-2 block text-sm font-medium text-gray-700"
+              className="mb-1.5 block text-sm font-medium text-[#37352f]"
             >
               Password
             </label>
@@ -250,14 +248,14 @@ export default function LoginPage() {
                   event.target.value
                 )
               }
-              className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none transition focus:border-gray-400"
+              className="w-full rounded-md border border-black/[0.15] px-3 py-2.5 text-sm outline-none transition focus:border-[#787774] focus:ring-2 focus:ring-black/[0.06]"
             />
           </div>
 
           {/* ERROR */}
 
           {error && (
-            <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-md bg-red-50 px-3 py-2.5 text-sm text-red-700">
               {error}
             </div>
           )}
@@ -267,7 +265,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-black px-4 py-3 font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-md bg-[#252525] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
               ? "Signing in..."
@@ -275,8 +273,8 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-gray-400">
-          ProveIt Hiring Inc.
+        <p className="mt-6 text-center text-xs text-[#9b9a97]">
+          ProveIt Hiring Innovations
         </p>
       </div>
     </main>

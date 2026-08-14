@@ -48,7 +48,7 @@ export async function createActivity(
   return addDoc(
     collection(
       db,
-      "activities"
+      "activity"
     ),
     {
       workspaceId:
@@ -97,7 +97,7 @@ export async function getActivityForWorkspace(
     query(
       collection(
         db,
-        "activities"
+        "activity"
       ),
       where(
         "workspaceId",
@@ -174,7 +174,7 @@ export async function getActivityForEntity(
     query(
       collection(
         db,
-        "activities"
+        "activity"
       ),
       where(
         "entityType",

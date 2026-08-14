@@ -255,9 +255,18 @@ export default function NewTaskForm({
         error
       );
 
-      if (
-        error instanceof Error
-      ) {
+      const errorCode =
+        typeof error === "object"
+        && error !== null
+        && "code" in error
+          ? String(error.code)
+          : "";
+
+      if (errorCode === "permission-denied") {
+        setError(
+          "You don't currently have permission to create tasks in this workspace. Contact a workspace administrator if you believe this is incorrect."
+        );
+      } else if (error instanceof Error) {
         setError(
           error.message
         );

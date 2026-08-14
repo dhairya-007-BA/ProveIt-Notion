@@ -34,6 +34,8 @@ async function getWorkspaceById(
     icon: data.icon,
     description: data.description,
     active: data.active,
+    deletedAt: data.deletedAt?.toDate(),
+    deletedBy: data.deletedBy,
     createdBy: data.createdBy,
     createdAt: data.createdAt?.toDate(),
     updatedAt: data.updatedAt?.toDate(),
@@ -81,7 +83,8 @@ export async function getAccessibleWorkspaces(
         workspace
       ): workspace is Workspace =>
         workspace !== null &&
-        workspace.active
+        workspace.active &&
+        !workspace.deletedAt
     )
     .sort((a, b) => {
       const preferredOrder = [
