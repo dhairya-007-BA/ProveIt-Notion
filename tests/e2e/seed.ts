@@ -111,6 +111,15 @@ async function main() {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+  await firestore.doc("documents/document-e2e").set({
+    title: "Hiring rubric",
+    content: "Use this rubric during candidate review.",
+    workspaceId: "company",
+    type: "document",
+    createdBy: userId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
   await firestore.doc("activities/activity-e2e").set({
     workspaceId: "company",
     entityType: "task",

@@ -27,6 +27,11 @@ test("workspace tasks, meetings, and activity routes work", async ({ page }) => 
   await expect(page.getByRole("article").getByText("Please review this.")).toBeVisible();
   await page.goto("/workspaces/company/activity");
   await expect(page.getByRole("heading", { name: "Recent activity" })).toBeVisible();
+
+  await page.goto("/workspaces/company/documents/document-e2e");
+  await expect(page.getByLabel("Document title")).toHaveValue("Hiring rubric");
+  await expect(page.getByLabel("Document content")).toContainText("candidate review");
+  await expect(page.getByLabel("Comment")).toBeVisible();
 });
 
 test("workspace dashboard summarizes live task and meeting data", async ({ page }) => {
@@ -67,6 +72,8 @@ test("a task opens as a route-backed side peek and expands to its direct page", 
   await page.goBack();
   await page.getByRole("link", { name: "Expand task" }).click();
   await expect(page).toHaveURL(/\/workspaces\/company\/tasks\/task-e2e$/);
+  await expect(page.getByLabel("Task status")).toHaveValue("done");
+  await expect(page.getByLabel("Comment")).toBeVisible();
   await page.reload();
   await expect(page.getByRole("textbox").first()).toHaveValue("Prepare candidate review");
 });

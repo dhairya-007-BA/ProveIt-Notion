@@ -146,6 +146,7 @@ test("an authorized employee can use the existing database table workflow", asyn
   await page.waitForURL(/\/rows\/row-e2e$/);
   await page.reload();
   await expect(page.getByLabel("Decision")).toBeVisible();
+  await expect(page.getByLabel("Comment")).toBeVisible();
   await page.goto("/workspaces/company/databases/database-e2e?row=row-e2e");
   await expect(page.getByRole("button", { name: "Close row pane" })).toBeVisible();
   await page.getByRole("button", { name: "Close row pane" }).click();
