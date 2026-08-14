@@ -120,7 +120,7 @@ async function main() {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
-  await firestore.doc("activities/activity-e2e").set({
+  await firestore.doc("activity/activity-e2e").set({
     workspaceId: "company",
     entityType: "task",
     entityId: "task-e2e",

@@ -9,5 +9,5 @@ export const COLLECTIONS = {
   CUSTOMERS: "customers",
   EXPENSES: "expenses",
   BUDGET_REQUESTS: "budgetRequests",
-  ACTIVITIES: "activities",
+  ACTIVITY: "activity",
 } as const;

@@ -49,7 +49,7 @@ export async function createTask(
 
   const activityRef =
     doc(
-      collection(db, "activities")
+      collection(db, "activity")
     );
 
   batch.set(

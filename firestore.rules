@@ -362,7 +362,7 @@ match /documents/{documentId} {
     // ACTIVITY
     // =========================================
 
-    match /activities/{activityId} {
+    match /activity/{activityId} {
 
       allow read: if
         canAccessWorkspace(
