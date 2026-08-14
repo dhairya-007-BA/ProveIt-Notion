@@ -41,6 +41,8 @@ return {
   icon: data.icon,
   description: data.description,
   active: data.active,
+  deletedAt: data.deletedAt?.toDate(),
+  deletedBy: data.deletedBy,
   createdBy: data.createdBy,
   createdAt: data.createdAt?.toDate(),
   updatedAt: data.updatedAt?.toDate(),

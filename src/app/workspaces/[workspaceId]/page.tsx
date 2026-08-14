@@ -102,6 +102,8 @@ export default function WorkspacePage() {
           description:
             data.description,
           active: data.active,
+          deletedAt: data.deletedAt?.toDate(),
+          deletedBy: data.deletedBy,
           createdBy:
             data.createdBy,
           createdAt:
@@ -178,7 +180,8 @@ export default function WorkspacePage() {
 
   if (
     !workspace ||
-    !workspace.active
+    !workspace.active ||
+    workspace.deletedAt
   ) {
     return (
       <main className="flex min-h-screen bg-gray-50">
@@ -191,9 +194,9 @@ export default function WorkspacePage() {
             </h1>
 
             <p className="mt-2 text-sm text-gray-500">
-              This workspace does
-              not exist or has been
-              archived.
+              {workspace?.deletedAt
+                ? "This workspace was deleted permanently and is no longer available."
+                : "This workspace does not exist or has been archived."}
             </p>
           </div>
         </section>

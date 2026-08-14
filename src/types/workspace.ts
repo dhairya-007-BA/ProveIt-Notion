@@ -18,6 +18,10 @@ export interface Workspace {
 
   active: boolean;
 
+  /** A permanent-delete tombstone. Archived workspaces do not have this. */
+  deletedAt?: Date;
+  deletedBy?: string;
+
   createdAt?: Date;
   updatedAt?: Date;
 

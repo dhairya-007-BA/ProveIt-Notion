@@ -34,10 +34,18 @@ async function seedDatabase() {
     async (context) => {
       const firestore = context.firestore();
 
-  await setDoc(
+      await setDoc(
         doc(firestore, "users", "company-member"),
         { active: true, role: "business_intern" }
       );
+      await setDoc(doc(firestore, "workspaces", "company"), { active: true });
+      await setDoc(doc(firestore, "workspaces", "business"), { active: true });
+      await setDoc(doc(firestore, "workspaces", "technology"), { active: true });
+      await setDoc(doc(firestore, "workspaces", "tombstoned"), {
+        active: false,
+        deletedAt: new Date(),
+        deletedBy: "bod-member",
+      });
       await setDoc(doc(firestore, "meetings", "meeting-1"), { workspaceId: "business", title: "Rules meeting", createdBy: "company-member" });
       await setDoc(
         doc(firestore, "users", "other-member"),
@@ -160,6 +168,11 @@ describe("database Firestore rules", () => {
     await assertFails(deleteDoc(doc(member, "meetings", "meeting-1")));
     await assertSucceeds(deleteDoc(doc(bod, "meetings", "meeting-1")));
   });
+
+  it("does not allow a tombstoned workspace to be restored", async () => {
+    const bod = testEnv.authenticatedContext("bod-member").firestore();
+    await assertFails(updateDoc(doc(bod, "workspaces", "tombstoned"), { active: true }));
+  });
   it("rejects unauthenticated database access", async () => {
     const firestore = testEnv.unauthenticatedContext().firestore();
 
@@ -212,6 +225,16 @@ describe("database Firestore rules", () => {
     const view = { name: "Screened", databaseId, workspaceId: "business", type: "table", createdBy: "company-member" };
     await assertSucceeds(setDoc(doc(member, "databaseViews", "screened"), view));
     await assertFails(setDoc(doc(other, "databaseViews", "blocked"), { ...view, createdBy: "other-member" }));
+    await assertSucceeds(getDocs(query(
+      collection(member, "databaseViews"),
+      where("databaseId", "==", databaseId),
+      where("workspaceId", "==", "business")
+    )));
+    await assertFails(getDocs(query(
+      collection(other, "databaseViews"),
+      where("databaseId", "==", databaseId),
+      where("workspaceId", "==", "business")
+    )));
   });
 
   it("rejects unauthorized database row access", async () => {

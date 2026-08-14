@@ -42,8 +42,18 @@ service cloud.firestore {
         && get(membershipPath(workspaceId)).data.get("active", false) == true;
     }
 
+    function workspacePath(workspaceId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId);
+    }
+
+    function workspaceIsTombstoned(workspaceId) {
+      return exists(workspacePath(workspaceId))
+        && get(workspacePath(workspaceId)).data.keys().hasAll(["deletedAt"]);
+    }
+
     function canAccessWorkspace(workspaceId) {
       return activeUser()
+        && !workspaceIsTombstoned(workspaceId)
         && (
           isBOD()
           || workspaceId == "company"
@@ -62,6 +72,7 @@ service cloud.firestore {
     function canUserAccessWorkspace(userId, workspaceId) {
       return exists(userPathFor(userId))
         && get(userPathFor(userId)).data.get("active", false) == true
+        && !workspaceIsTombstoned(workspaceId)
         && (
           workspaceId == "company"
           || get(userPathFor(userId)).data.get("role", "") == "bod"
@@ -143,9 +154,14 @@ service cloud.firestore {
 
     match /workspaces/{workspaceId} {
 
-      allow read: if canAccessWorkspace(workspaceId);
+      // BOD can inspect tombstone metadata in Administration, while all
+      // workspace-scoped content remains unavailable through canAccessWorkspace.
+      allow read: if isBOD() || canAccessWorkspace(workspaceId);
 
-      allow create, update, delete: if isBOD();
+      allow create, delete: if isBOD();
+      // A tombstone is intentionally irreversible through ordinary clients.
+      allow update: if isBOD()
+        && !resource.data.keys().hasAll(["deletedAt"]);
     }
 
     // =========================================
@@ -209,7 +225,7 @@ service cloud.firestore {
     // Shared table views belong to an accessible database. They only contain
     // presentation state, never row data or private per-user preferences.
     match /databaseViews/{viewId} {
-      allow read: if canAccessDatabase(resource.data.databaseId);
+      allow read: if canAccessWorkspace(resource.data.workspaceId);
       allow create: if
         canAccessDatabase(request.resource.data.databaseId)
         && request.resource.data.createdBy == request.auth.uid

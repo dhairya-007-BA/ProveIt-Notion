@@ -542,11 +542,15 @@ export default function DatabasePage() {
   useEffect(() => {
     if (!firebaseUser || !databaseId) return;
     return onSnapshot(
-      query(collection(db, "databaseViews"), where("databaseId", "==", databaseId)),
+      query(
+        collection(db, "databaseViews"),
+        where("databaseId", "==", databaseId),
+        where("workspaceId", "==", workspaceId)
+      ),
       (snapshot) => setViews(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as DatabaseView))),
       () => setError("Saved views could not be loaded.")
     );
-  }, [firebaseUser, databaseId]);
+  }, [firebaseUser, databaseId, workspaceId]);
 
   function applyView(view: DatabaseView | null) {
     const properties = database?.properties || [];
