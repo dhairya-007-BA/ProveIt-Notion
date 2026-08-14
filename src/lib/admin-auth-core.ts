@@ -30,6 +30,31 @@ export class AdminAuthError extends Error {
   }
 }
 
+function firebaseErrorCode(error: unknown) {
+  return typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+    ? error.code
+    : "unknown";
+}
+
+/**
+ * These errors mean the server could not authenticate itself to Firebase.
+ * They must not be reported as a problem with the employee's ID token.
+ */
+export function isAdminCredentialFailure(
+  error: unknown
+) {
+  const code = firebaseErrorCode(error);
+
+  return code === "unknown" ||
+    code.startsWith("app/") ||
+    code === "auth/invalid-credential" ||
+    code === "auth/insufficient-permission" ||
+    code === "auth/internal-error";
+}
+
 export async function authorizeBOD(
   request: Request,
   operation: string,
@@ -75,21 +100,27 @@ export async function authorizeBOD(
         true
       );
   } catch (error: unknown) {
-    const firebaseErrorCode =
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      typeof error.code === "string"
-        ? error.code
-        : "unknown";
+    const errorCode = firebaseErrorCode(error);
+    const credentialFailure =
+      isAdminCredentialFailure(error);
 
     console.warn("Firebase ID token verification failed", {
       operation,
       expectedProjectId:
         dependencies.expectedProjectId,
       authorizationPresent,
-      firebaseErrorCode,
+      errorCategory: credentialFailure
+        ? "admin-credential-unavailable"
+        : "invalid-user-token",
+      firebaseErrorCode: errorCode,
     });
+
+    if (credentialFailure) {
+      throw new AdminAuthError(
+        "Server authentication is temporarily unavailable.",
+        503
+      );
+    }
 
     throw new AdminAuthError(
       "Invalid or expired authentication.",

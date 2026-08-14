@@ -34,7 +34,7 @@ test("comments, replies, mentions, and inbox navigation work for emulator users"
   await notification.getByRole("button", { name: "Open You were mentioned" }).click();
   await expect(page).toHaveURL("/workspaces/company/tasks/task-e2e");
   await page.goto("/workspaces/company/inbox");
-  await page.getByRole("button", { name: "all" }).click();
+  await page.getByRole("button", { name: "all", exact: true }).click();
   await expect(notification.getByRole("button", { name: "Unread" })).toBeVisible();
   await page.reload();
   await expect(notification.getByRole("button", { name: "Unread" })).toBeVisible();

@@ -100,6 +100,53 @@ describe("admin authentication", () => {
     });
   });
 
+  it("denies a revoked token", async () => {
+    const authDependencies = dependencies();
+
+    vi.mocked(
+      authDependencies.verifyIdToken
+    ).mockRejectedValue({
+      code: "auth/id-token-revoked",
+    });
+
+    await expect(
+      authorizeBOD(
+        requestWithToken("revoked-token"),
+        "reset-employee-password",
+        authDependencies
+      )
+    ).rejects.toMatchObject({
+      message: "Invalid or expired authentication.",
+      status: 401,
+    });
+  });
+
+  it("does not misclassify an Admin credential failure as a user token failure", async () => {
+    const authDependencies = dependencies();
+
+    vi.mocked(
+      authDependencies.verifyIdToken
+    ).mockRejectedValue({
+      code: "unknown",
+    });
+
+    await expect(
+      authorizeBOD(
+        requestWithToken("valid-user-token"),
+        "create-employee",
+        authDependencies
+      )
+    ).rejects.toMatchObject({
+      message:
+        "Server authentication is temporarily unavailable.",
+      status: 503,
+    });
+
+    expect(
+      authDependencies.getUserProfile
+    ).not.toHaveBeenCalled();
+  });
+
   it("denies an authenticated non-BOD", async () => {
     await expect(
       authorizeBOD(
@@ -131,6 +178,24 @@ describe("admin authentication", () => {
       authorizeBOD(
         requestWithToken("reset-token"),
         "reset-employee-password",
+        dependencies()
+      )
+    ).resolves.toMatchObject({ uid: BOD_UID });
+  });
+
+  it("uses the verified token UID rather than a client-provided UID", async () => {
+    await expect(
+      authorizeBOD(
+        new Request(
+          "http://localhost/api/admin/employees?uid=attacker",
+          {
+            headers: {
+              Authorization: "Bearer valid-token",
+              "X-Employee-Uid": "attacker",
+            },
+          }
+        ),
+        "create-employee",
         dependencies()
       )
     ).resolves.toMatchObject({ uid: BOD_UID });

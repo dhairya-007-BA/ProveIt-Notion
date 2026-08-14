@@ -332,18 +332,18 @@ export default function DatabasesPage() {
   }
 
   return (
-    <main className="flex min-h-screen bg-[#fbfbfa]">
+    <main className="flex min-h-screen bg-[var(--background)]">
       <Sidebar />
 
-      <section className="flex-1 px-6 py-8 md:px-10">
-        <div className="mx-auto max-w-5xl">
+      <section className="proveit-content">
+        <div className="proveit-content-inner max-w-5xl">
 
           {/* BREADCRUMB */}
 
-          <div className="mb-10">
+          <div>
             <Link
               href={`/workspaces/${workspaceId}`}
-              className="rounded px-1 py-1 text-sm text-[#787774] transition hover:bg-black/[0.05] hover:text-[#37352f]"
+              className="proveit-back-link px-1"
             >
               ← Back to workspace
             </Link>
@@ -351,11 +351,11 @@ export default function DatabasesPage() {
 
           {/* HEADER */}
 
-          <div className="mb-8 flex items-start justify-between">
+          <div className="proveit-page-header mb-8">
 
             <div>
-              <p className="mb-2 text-xs font-medium text-[#9b9a97]">DATABASES</p>
-              <h1 className="text-4xl font-semibold tracking-[-0.03em] text-[#37352f]">
+              <p className="proveit-label mb-2">DATABASES</p>
+              <h1 className="proveit-page-title">
                 Databases
               </h1>
 
@@ -370,7 +370,7 @@ export default function DatabasesPage() {
               onClick={
                 createDatabase
               }
-              className="rounded-md bg-[#252525] px-3 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+              className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50"
             >
               {creating
                 ? "Creating..."
@@ -389,7 +389,7 @@ export default function DatabasesPage() {
 
           {/* DATABASE LIST */}
 
-          <div className="overflow-hidden rounded-md border border-black/[0.12] bg-white">
+          <div className="proveit-list">
 
             {databases.length ===
             0 ? (
@@ -432,15 +432,15 @@ export default function DatabasesPage() {
                     key={
                       database.id
                     }
-                    className="group flex items-center border-b border-black/[0.08] last:border-b-0"
+                    className="proveit-list-row group flex items-center border-b border-black/[0.08] last:border-b-0"
                   >
 
                     <Link
                       href={`/workspaces/${workspaceId}/databases/${database.id}`}
-                      className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 transition hover:bg-[#f7f7f5]"
+                      className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3"
                     >
 
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#e9e9e6] text-base">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--sidebar)] text-base">
                         ▦
                       </div>
 

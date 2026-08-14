@@ -16,6 +16,19 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+### Firebase Admin credentials
+
+Server-side administrative routes use Firebase Admin with Application Default
+Credentials. In local development, set `GOOGLE_APPLICATION_CREDENTIALS` to the
+absolute path of a service-account JSON file for `proveit-internal` before
+starting the server. Keep that file outside this repository; it must never be
+committed or exposed through `NEXT_PUBLIC_*` variables.
+
+Deployed environments should use their platform-provided workload identity or
+service account rather than bundling a service-account JSON file. The identity
+must be authorized to verify revoked Firebase ID tokens and access the required
+Firebase Auth and Firestore resources.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

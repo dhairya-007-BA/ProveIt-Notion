@@ -205,15 +205,15 @@ export default function WorkspacePage() {
     <main className="flex min-h-screen bg-[var(--background)]">
       <Sidebar />
 
-      <section className="min-w-0 flex-1 px-5 py-7 sm:px-8 md:px-10">
-        <div className="mx-auto max-w-5xl">
+      <section className="proveit-content">
+        <div className="proveit-content-inner max-w-5xl">
 
           {/* WORKSPACE HEADER */}
 
-          <div className="mb-9">
+          <div className="mb-10">
             <div className="flex items-center gap-4">
 
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--sidebar)] text-2xl">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-2xl shadow-[var(--shadow-sm)]">
                 {workspace.icon ||
                   "📁"}
               </div>
@@ -241,7 +241,7 @@ export default function WorkspacePage() {
 
           {/* WORKSPACE MODULES */}
 
-          <div className="max-w-4xl border-t border-[var(--border)] pt-3 sm:grid sm:grid-cols-2 sm:gap-x-5">
+          <div className="max-w-5xl rounded-xl border border-[var(--border)] bg-white p-2 shadow-[var(--shadow-sm)] sm:grid sm:grid-cols-2 sm:gap-x-2">
 
             <WorkspaceCard
               href={`/workspaces/${workspaceId}/dashboard`}
@@ -306,9 +306,9 @@ function WorkspaceCard({
   return (
     <Link
       href={href}
-      className="group flex items-start gap-3 rounded-md px-3 py-3 transition hover:bg-[var(--hover)]"
+      className="group flex items-start gap-3 rounded-lg px-3 py-3.5 transition hover:bg-[var(--hover)]"
     >
-      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--sidebar)] text-lg">
+      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--sidebar)] text-lg">
         {icon}
       </div>
       <div className="min-w-0 flex-1">
