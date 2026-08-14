@@ -42,8 +42,9 @@ test("an authorized employee can use the existing database table workflow", asyn
     if (!await filters.isVisible()) {
       await page.getByRole("button", { name: /Filter/ }).click();
     }
+    const filterIndex = await filters.getByTestId("filter-row").count();
     await filters.getByRole("button", { name: "+ Add filter" }).click();
-    return filters.getByTestId("filter-row").last();
+    return filters.getByTestId("filter-row").nth(filterIndex);
   };
   const clearFilters = async () => {
     await filters.getByRole("button", { name: "Clear all" }).click();
@@ -131,8 +132,8 @@ test("an authorized employee can use the existing database table workflow", asyn
   await firstFilter.getByLabel("Filter operator").selectOption("less_than_or_equal");
   await firstFilter.getByLabel("Filter value").fill("82");
   await expect(page.getByRole("complementary", { name: "Row detail pane" })).toBeVisible();
-  await clearFilters();
   await page.getByRole("button", { name: "Close row pane" }).click();
+  await clearFilters();
   await filters.getByRole("button", { name: "Done" }).click();
 
   await page.getByRole("button", { name: /Sort/ }).click();
@@ -159,6 +160,7 @@ test("an authorized employee can use the existing database table workflow", asyn
   await page.getByLabel("Sort direction").selectOption("asc");
   await expect(titleInputs.first()).toHaveValue("Grace Hopper");
   await page.getByRole("button", { name: "Clear sort" }).click();
+  await page.getByRole("button", { name: "Done" }).click();
   await page.getByLabel("Clear search").click();
 
   const notes = page.locator(
@@ -201,16 +203,17 @@ test("an authorized employee can use the existing database table workflow", asyn
   await expect(page.getByLabel("Rename Review")).toBeVisible();
   await page.getByLabel("Close property editor").click();
 
-  const decision = page.getByLabel("Decision for row row-e2e");
+  const decision = page.getByLabel("Decision for row row-e2e", { exact: true });
   await decision.selectOption({ label: "Interview" });
   await expect(decision).toHaveValue(/.+/);
   await page.reload();
   await expect(
-    page.getByLabel("Decision for row row-e2e")
+    page.getByLabel("Decision for row row-e2e", { exact: true })
   ).toHaveValue(/.+/);
 
   const persistedDecision = page.getByLabel(
-    "Decision for row row-e2e"
+    "Decision for row row-e2e",
+    { exact: true }
   );
   await persistedDecision.selectOption("");
   await expect(persistedDecision).toHaveValue("");
@@ -225,12 +228,12 @@ test("an authorized employee can use the existing database table workflow", asyn
   await page.getByLabel("Save Interview").click();
   await expect(
     page
-      .getByLabel("Decision for row row-e2e").first()
+      .getByLabel("Decision for row row-e2e", { exact: true })
       .getByRole("option", { name: "Technical Interview" })
   ).toHaveText("Technical Interview");
   await expect(
     page
-      .getByLabel("Decision for row row-e2e").first()
+      .getByLabel("Decision for row row-e2e", { exact: true })
       .locator("option:checked")
   ).toHaveText("Technical Interview");
   await page.getByLabel("Close property editor").click();
@@ -243,13 +246,12 @@ test("an authorized employee can use the existing database table workflow", asyn
   ).toBeVisible();
   await page.getByLabel("Close property editor").click();
 
-  await page.getByLabel("Decision for row row-e2e").selectOption({
+  await page.getByLabel("Decision for row row-e2e", { exact: true }).selectOption({
     label: "Offer",
   });
   await expect(
     page
-      .getByLabel("Decision for row row-e2e")
-      .first()
+      .getByLabel("Decision for row row-e2e", { exact: true })
       .locator("option:checked")
   ).toHaveText("Offer");
   await page.getByTitle("Edit Decision").click();
@@ -264,7 +266,7 @@ test("an authorized employee can use the existing database table workflow", asyn
     page.getByTitle("Open row").first().click(),
   ]);
   await expect(page.getByRole("complementary", { name: "Row detail pane" })).toBeVisible();
-  const rowDecision = page.getByLabel("Decision for row row-e2e").last();
+  const rowDecision = page.getByLabel("Decision for row row-e2e", { exact: true }).last();
   await expect(rowDecision).toHaveValue(/.+/);
   await rowDecision.selectOption({ label: "Review" });
   await expect(rowDecision.locator("option:checked")).toHaveText("Review");
@@ -272,8 +274,7 @@ test("an authorized employee can use the existing database table workflow", asyn
   await expect(page).toHaveURL(/\/workspaces\/company\/databases\/database-e2e$/);
   await expect(
     page
-      .getByLabel("Decision for row row-e2e")
-      .first()
+      .getByLabel("Decision for row row-e2e", { exact: true })
       .locator("option:checked")
   ).toHaveText("Review");
   await page.goForward();

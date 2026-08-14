@@ -4,6 +4,9 @@ const port = 3100;
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  // Every E2E spec uses the same deterministic emulator fixtures and several
+  // workflows mutate them; serialize the suite to prevent cross-spec races.
+  workers: 1,
   fullyParallel: false,
   use: {
     baseURL: `http://localhost:${port}`,

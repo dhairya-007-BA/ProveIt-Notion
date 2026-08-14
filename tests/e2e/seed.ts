@@ -31,9 +31,36 @@ async function ensureTestUser(uid: string, id: string, password: string) {
   }
 }
 
+async function clearCollaborationFixtures() {
+  const comments = await firestore
+    .collection("comments")
+    .where("workspaceId", "==", "company")
+    .where("entityId", "==", "task-e2e")
+    .get();
+  const notifications = await firestore
+    .collection("notifications")
+    .where("recipientUid", "==", "mentioned-user")
+    .get();
+  const batch = firestore.batch();
+  comments.docs.forEach((comment) => batch.delete(comment.ref));
+  notifications.docs.forEach((notification) => batch.delete(notification.ref));
+  if (!comments.empty || !notifications.empty) await batch.commit();
+}
+
+async function clearDatabaseRows() {
+  const rows = await firestore.collection("databases/database-e2e/rows").get();
+  if (rows.empty) return;
+  const batch = firestore.batch();
+  rows.docs.forEach((row) => batch.delete(row.ref));
+  await batch.commit();
+}
+
 async function main() {
+  await clearCollaborationFixtures();
+  await clearDatabaseRows();
   await ensureTestUser(userId, employeeId, "database-test-password");
   await ensureTestUser("mentioned-user", "mentioned-user", "mentioned-user-password");
+  await ensureTestUser("admin-e2e-user", "admin-test", "admin-test-password");
 
   await firestore.doc(`users/${userId}`).set({
     active: true,
@@ -49,6 +76,13 @@ async function main() {
     role: "business_intern",
     mustChangePassword: false,
   });
+  await firestore.doc("users/admin-e2e-user").set({
+    active: true,
+    employeeId: "admin-test",
+    name: "Admin Test User",
+    role: "bod",
+    mustChangePassword: false,
+  });
   await firestore.doc("workspaces/company").set({
     name: "Company",
     slug: "company",
@@ -60,6 +94,20 @@ async function main() {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+  for (const workspace of [
+    { id: "business", name: "Business", slug: "business", kind: "team", icon: "💼", active: true },
+    { id: "technology", name: "Technology", slug: "technology", kind: "team", icon: "💻", active: true },
+    { id: "board", name: "Board", slug: "board", kind: "board", icon: "🔒", active: true },
+    { id: "dhairya", name: "Dhairya", slug: "dhairya", kind: "custom", icon: "📁", active: false },
+  ]) {
+    await firestore.doc(`workspaces/${workspace.id}`).set({
+      ...workspace,
+      description: `The ${workspace.name} workspace used by the emulator test suite.`,
+      createdBy: userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
   await firestore
     .doc(`workspaceMemberships/company_${userId}`)
     .set({
@@ -146,6 +194,15 @@ async function main() {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+  await firestore.doc("tasks/task-private-e2e").set({
+    title: "Private business planning",
+    workspaceId: "business",
+    status: "todo",
+    priority: "medium",
+    createdBy: userId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
   await firestore.doc("meetings/meeting-e2e").set({
     title: "Candidate review",
     workspaceId: "company",
@@ -171,6 +228,53 @@ async function main() {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+  const visualSearchBatch = firestore.batch();
+  const visualCreatedAt = new Date();
+  for (let index = 1; index <= 12; index += 1) {
+    const suffix = String(index).padStart(2, "0");
+    visualSearchBatch.set(firestore.doc(`tasks/search-visual-task-${suffix}`), {
+      title: `Visual search task ${suffix}`,
+      workspaceId: "company",
+      status: "todo",
+      priority: "medium",
+      createdBy: userId,
+      archived: false,
+      createdAt: visualCreatedAt,
+      updatedAt: visualCreatedAt,
+    });
+    visualSearchBatch.set(firestore.doc(`meetings/search-visual-meeting-${suffix}`), {
+      title: `Visual search meeting ${suffix}`,
+      workspaceId: "company",
+      status: "scheduled",
+      createdBy: userId,
+      createdAt: visualCreatedAt,
+      updatedAt: visualCreatedAt,
+    });
+    visualSearchBatch.set(firestore.doc(`documents/search-visual-document-${suffix}`), {
+      title: `Visual search document ${suffix}`,
+      content: "Visual search fixture.",
+      workspaceId: "company",
+      type: "document",
+      createdBy: userId,
+      createdAt: visualCreatedAt,
+      updatedAt: visualCreatedAt,
+    });
+    visualSearchBatch.set(firestore.doc(`databases/search-visual-database-${suffix}`), {
+      name: `Visual search database ${suffix}`,
+      workspaceId: "company",
+      createdBy: userId,
+      properties: [{ id: "title", name: "Name", type: "title" }],
+      createdAt: visualCreatedAt,
+      updatedAt: visualCreatedAt,
+    });
+    visualSearchBatch.set(firestore.doc(`databases/search-visual-database-${suffix}/rows/search-visual-row-${suffix}`), {
+      createdBy: userId,
+      createdAt: visualCreatedAt,
+      updatedAt: visualCreatedAt,
+      values: { title: `Visual search row ${suffix}` },
+    });
+  }
+  await visualSearchBatch.commit();
   await firestore.doc("activity/activity-e2e").set({
     workspaceId: "company",
     entityType: "task",

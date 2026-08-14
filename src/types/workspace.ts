@@ -14,6 +14,7 @@ export interface Workspace {
 
   icon?: string;
   description?: string;
+  accentColor?: WorkspaceAccentColor;
 
   active: boolean;
 
@@ -22,3 +23,9 @@ export interface Workspace {
 
   createdBy: string;
 }
+
+export type WorkspaceAccentColor =
+  | "proveit-blue"
+  | "teal"
+  | "orange"
+  | "charcoal";

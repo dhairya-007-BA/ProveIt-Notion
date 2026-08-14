@@ -45,7 +45,26 @@ export default function WorkspaceManager() {
   }
 
   useEffect(() => {
-    loadWorkspaces();
+    let current = true;
+
+    void getWorkspaces()
+      .then((data) => {
+        if (current) {
+          setWorkspaces(data);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load workspaces:", error);
+      })
+      .finally(() => {
+        if (current) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      current = false;
+    };
   }, []);
 
   async function handleCreateWorkspace() {
@@ -270,12 +289,12 @@ export default function WorkspaceManager() {
 
                 <div>
                   <div className="flex items-center gap-2">
-<Link
-  href={`/admin/workspaces/${workspace.id}`}
-  className="font-medium hover:underline"
->
-  {workspace.name}
-</Link>
+                    <Link
+                      href={`/admin/workspaces/${workspace.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      {workspace.name}
+                    </Link>
 
                     {!workspace.active && (
                       <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
