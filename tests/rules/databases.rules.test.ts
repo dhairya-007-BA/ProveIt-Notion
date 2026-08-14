@@ -7,6 +7,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -33,10 +34,11 @@ async function seedDatabase() {
     async (context) => {
       const firestore = context.firestore();
 
-      await setDoc(
+  await setDoc(
         doc(firestore, "users", "company-member"),
         { active: true, role: "business_intern" }
       );
+      await setDoc(doc(firestore, "meetings", "meeting-1"), { workspaceId: "business", title: "Rules meeting", createdBy: "company-member" });
       await setDoc(
         doc(firestore, "users", "other-member"),
         { active: true, role: "business_intern" }
@@ -152,6 +154,12 @@ afterAll(async () => {
 });
 
 describe("database Firestore rules", () => {
+  it("allows only BOD users to delete meetings", async () => {
+    const member = testEnv.authenticatedContext("company-member").firestore();
+    const bod = testEnv.authenticatedContext("bod-member").firestore();
+    await assertFails(deleteDoc(doc(member, "meetings", "meeting-1")));
+    await assertSucceeds(deleteDoc(doc(bod, "meetings", "meeting-1")));
+  });
   it("rejects unauthenticated database access", async () => {
     const firestore = testEnv.unauthenticatedContext().firestore();
 

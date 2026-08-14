@@ -15,6 +15,14 @@
   --accent: #1f2937;
   --danger: #d44c47;
   --focus: #3b82c4;
+  --status-neutral-bg: #eef1f5;
+  --status-neutral-fg: #455468;
+  --status-positive-bg: #eaf6ed;
+  --status-positive-fg: #256b3c;
+  --status-warning-bg: #fbf2dd;
+  --status-warning-fg: #805d16;
+  --status-danger-bg: #f9e8e7;
+  --status-danger-fg: #9a3731;
   --shadow-sm: 0 1px 2px rgba(28, 28, 26, 0.04), 0 1px 3px rgba(28, 28, 26, 0.03);
   --shadow-md: 0 12px 30px rgba(28, 28, 26, 0.08), 0 2px 8px rgba(28, 28, 26, 0.04);
 }
@@ -211,6 +219,21 @@ a:focus-visible {
   background: #f9e6e4;
   color: #963b35;
 }
+
+.proveit-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.proveit-status-scheduled { background: var(--status-neutral-bg); color: var(--status-neutral-fg); }
+.proveit-status-in_progress { background: var(--status-warning-bg); color: var(--status-warning-fg); }
+.proveit-status-completed { background: var(--status-positive-bg); color: var(--status-positive-fg); }
+.proveit-status-cancelled { background: var(--status-danger-bg); color: var(--status-danger-fg); }
 
 .proveit-control {
   border: 1px solid var(--border);

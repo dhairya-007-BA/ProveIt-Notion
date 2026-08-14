@@ -85,13 +85,17 @@ async function main() {
       { id: "title", name: "Name", type: "title" },
       { id: "notes", name: "Notes", type: "text" },
       { id: "score", name: "Score", type: "number" },
+      { id: "review-date", name: "Review date", type: "date" },
       { id: "contacted", name: "Contacted", type: "checkbox" },
+      { id: "email", name: "Email", type: "email" },
+      { id: "portfolio", name: "Portfolio", type: "url" },
+      { id: "phone", name: "Phone", type: "phone" },
       {
         id: "legacy-stage",
         name: "Legacy stage",
         type: "select",
         options: [
-          { id: "legacy-stage-interview", name: "Interview" },
+          { id: "stage-z", name: "Alpha" },
         ],
       },
     ],
@@ -106,8 +110,29 @@ async function main() {
         title: "Ada Lovelace",
         notes: "Initial screen",
         score: 95,
+        "review-date": "2026-01-15",
         contacted: false,
+        email: "ada@example.test",
+        portfolio: "https://example.test/ada",
+        phone: "555-0101",
         "legacy-stage": "Historical follow-up",
+      },
+    });
+  await firestore
+    .doc("databases/database-e2e/rows/row-e2e-2")
+    .set({
+      createdBy: userId,
+      createdAt: new Date(Date.now() + 1),
+      updatedAt: new Date(Date.now() + 1),
+      values: {
+        title: "Grace Hopper",
+        notes: "Technical screen",
+        score: 82,
+        contacted: true,
+        email: "grace@example.test",
+        portfolio: "https://example.test/grace",
+        phone: "555-0102",
+        "legacy-stage": "stage-z",
       },
     });
   await firestore.doc("tasks/task-e2e").set({
@@ -125,6 +150,13 @@ async function main() {
     title: "Candidate review",
     workspaceId: "company",
     createdBy: userId,
+    organizerId: userId,
+    participantIds: ["mentioned-user"],
+    status: "scheduled",
+    startAt: new Date("2026-08-20T09:00:00"),
+    endAt: new Date("2026-08-20T10:00:00"),
+    location: "Room A",
+    meetingUrl: "https://example.test/meeting",
     transcript: "Initial transcript",
     notes: "Initial notes",
     createdAt: new Date(),

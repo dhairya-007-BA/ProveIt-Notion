@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import {
@@ -54,9 +54,191 @@ interface DatabaseData {
 
 interface DatabaseRow {
   id: string;
-  values: Record<string, string | number | boolean>;
+  values: Record<string, string | number | boolean | null>;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+type SortDirection = "asc" | "desc";
+
+interface ActiveSort {
+  propertyId: string;
+  direction: SortDirection;
+}
+
+type FilterOperator =
+  | "contains"
+  | "does_not_contain"
+  | "is"
+  | "is_not"
+  | "is_empty"
+  | "is_not_empty"
+  | "equals"
+  | "not_equals"
+  | "greater_than"
+  | "greater_than_or_equal"
+  | "less_than"
+  | "less_than_or_equal"
+  | "before"
+  | "after"
+  | "on_or_before"
+  | "on_or_after"
+  | "is_checked"
+  | "is_unchecked";
+
+interface DatabaseFilter {
+  id: string;
+  propertyId: string;
+  operator: FilterOperator;
+  value?: string;
+}
+
+const searchablePropertyTypes: PropertyType[] = [
+  "title",
+  "text",
+  "email",
+  "url",
+  "phone",
+];
+
+function filterOperators(propertyType: PropertyType): { value: FilterOperator; label: string }[] {
+  if (propertyType === "number") return [
+    { value: "equals", label: "=" }, { value: "not_equals", label: "≠" },
+    { value: "greater_than", label: ">" }, { value: "greater_than_or_equal", label: "≥" },
+    { value: "less_than", label: "<" }, { value: "less_than_or_equal", label: "≤" },
+    { value: "is_empty", label: "Is empty" }, { value: "is_not_empty", label: "Is not empty" },
+  ];
+  if (propertyType === "date") return [
+    { value: "is", label: "Is" }, { value: "before", label: "Is before" },
+    { value: "after", label: "Is after" }, { value: "on_or_before", label: "Is on or before" },
+    { value: "on_or_after", label: "Is on or after" }, { value: "is_empty", label: "Is empty" },
+    { value: "is_not_empty", label: "Is not empty" },
+  ];
+  if (propertyType === "checkbox") return [
+    { value: "is_checked", label: "Is checked" }, { value: "is_unchecked", label: "Is unchecked" },
+  ];
+  if (propertyType === "select") return [
+    { value: "is", label: "Is" }, { value: "is_not", label: "Is not" },
+    { value: "is_empty", label: "Is empty" }, { value: "is_not_empty", label: "Is not empty" },
+  ];
+  return [
+    { value: "contains", label: "Contains" }, { value: "does_not_contain", label: "Does not contain" },
+    { value: "is", label: "Is" }, { value: "is_not", label: "Is not" },
+    { value: "is_empty", label: "Is empty" }, { value: "is_not_empty", label: "Is not empty" },
+  ];
+}
+
+function operatorNeedsValue(operator: FilterOperator) {
+  return !["is_empty", "is_not_empty", "is_checked", "is_unchecked"].includes(operator);
+}
+
+function numericValue(value: string | number | boolean | null | undefined) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function matchesFilter(row: DatabaseRow, filter: DatabaseFilter, property: DatabaseProperty) {
+  const value = row.values[property.id];
+  const empty = isEmptyValue(value);
+
+  if (filter.operator === "is_empty") return empty;
+  if (filter.operator === "is_not_empty") return !empty;
+  if (filter.operator === "is_checked") return value === true;
+  if (filter.operator === "is_unchecked") return value === false;
+  if (!filter.value?.trim()) return true;
+
+  if (property.type === "number") {
+    const rowNumber = numericValue(value);
+    const filterNumber = numericValue(filter.value);
+    if (rowNumber === null || filterNumber === null) return false;
+    if (filter.operator === "equals") return rowNumber === filterNumber;
+    if (filter.operator === "not_equals") return rowNumber !== filterNumber;
+    if (filter.operator === "greater_than") return rowNumber > filterNumber;
+    if (filter.operator === "greater_than_or_equal") return rowNumber >= filterNumber;
+    if (filter.operator === "less_than") return rowNumber < filterNumber;
+    return rowNumber <= filterNumber;
+  }
+
+  if (property.type === "date") {
+    const rowDate = typeof value === "string" ? value : "";
+    const filterDate = filter.value;
+    if (!rowDate) return false;
+    if (filter.operator === "is") return rowDate === filterDate;
+    if (filter.operator === "before") return rowDate < filterDate;
+    if (filter.operator === "after") return rowDate > filterDate;
+    if (filter.operator === "on_or_before") return rowDate <= filterDate;
+    return rowDate >= filterDate;
+  }
+
+  if (property.type === "select") {
+    if (typeof value !== "string") return false;
+    return filter.operator === "is" ? value === filter.value : value !== filter.value;
+  }
+
+  const rowText = String(value || "").trim().toLocaleLowerCase();
+  const filterText = filter.value.trim().toLocaleLowerCase();
+  if (filter.operator === "contains") return rowText.includes(filterText);
+  if (filter.operator === "does_not_contain") return !rowText.includes(filterText);
+  if (filter.operator === "is") return rowText === filterText;
+  return rowText !== filterText;
+}
+
+function isEmptyValue(value: string | number | boolean | null | undefined) {
+  return value === undefined || value === null || value === "";
+}
+
+function visiblePropertyValue(
+  row: DatabaseRow,
+  property: DatabaseProperty
+) {
+  const value = row.values[property.id];
+
+  if (property.type === "select" && typeof value === "string") {
+    return property.options?.find((option) => option.id === value)?.name || value;
+  }
+
+  return value;
+}
+
+function compareRows(
+  left: DatabaseRow,
+  right: DatabaseRow,
+  property: DatabaseProperty,
+  direction: SortDirection
+) {
+  const leftValue = visiblePropertyValue(left, property);
+  const rightValue = visiblePropertyValue(right, property);
+
+  if (isEmptyValue(leftValue) || isEmptyValue(rightValue)) {
+    if (isEmptyValue(leftValue) && isEmptyValue(rightValue)) return 0;
+    return isEmptyValue(leftValue) ? 1 : -1;
+  }
+
+  let result: number;
+
+  if (property.type === "checkbox") {
+    result = Number(Boolean(leftValue)) - Number(Boolean(rightValue));
+  } else if (property.type === "number") {
+    result = Number(leftValue) - Number(rightValue);
+  } else {
+    result = String(leftValue).localeCompare(String(rightValue), undefined, {
+      sensitivity: "base",
+      numeric: true,
+    });
+  }
+
+  return direction === "asc" ? result : -result;
+}
+
+function directionLabel(propertyType: PropertyType, direction: SortDirection) {
+  const ascending = direction === "asc";
+
+  if (propertyType === "number") return ascending ? "Lowest → Highest" : "Highest → Lowest";
+  if (propertyType === "date") return ascending ? "Oldest → Newest" : "Newest → Oldest";
+  if (propertyType === "checkbox") return ascending ? "Unchecked → Checked" : "Checked → Unchecked";
+  return ascending ? "A → Z" : "Z → A";
 }
 
 export default function DatabasePage() {
@@ -121,11 +303,69 @@ export default function DatabasePage() {
   const [optionName, setOptionName] =
     useState("");
 
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [activeSort, setActiveSort] =
+    useState<ActiveSort | null>(null);
+
+  const [sortOpen, setSortOpen] =
+    useState(false);
+
+  const [filters, setFilters] =
+    useState<DatabaseFilter[]>([]);
+
+  const [filterOpen, setFilterOpen] =
+    useState(false);
+
   const [editingOptionId, setEditingOptionId] =
     useState<string | null>(null);
 
   const [editingOptionName, setEditingOptionName] =
     useState("");
+
+  const displayRows = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+    const properties = database?.properties || [];
+    const searchedRows = normalizedSearch
+      ? rows.filter((row) => properties.some((property) =>
+        searchablePropertyTypes.includes(property.type) &&
+        String(visiblePropertyValue(row, property) || "")
+          .toLocaleLowerCase()
+          .includes(normalizedSearch)
+      ))
+      : rows;
+
+    const filteredRows = searchedRows.filter((row) => filters.every((filter) => {
+      const property = properties.find((candidate) => candidate.id === filter.propertyId);
+      return !property || matchesFilter(row, filter, property);
+    }));
+
+    if (!activeSort) return filteredRows;
+
+    const property = properties.find(
+      (candidate) => candidate.id === activeSort.propertyId
+    );
+
+    if (!property) return filteredRows;
+
+    return [...filteredRows].sort((left, right) =>
+      compareRows(left, right, property, activeSort.direction)
+    );
+  }, [activeSort, database?.properties, filters, rows, searchQuery]);
+
+  function addFilter() {
+    const property = database?.properties[0];
+    if (!property) return;
+    setFilters((current) => [...current, {
+      id: crypto.randomUUID(),
+      propertyId: property.id,
+      operator: filterOperators(property.type)[0].value,
+    }]);
+  }
+
+  function updateFilter(filterId: string, updates: Partial<DatabaseFilter>) {
+    setFilters((current) => current.map((filter) => filter.id === filterId ? { ...filter, ...updates } : filter));
+  }
 
   /*
    * Authentication
@@ -686,6 +926,16 @@ export default function DatabasePage() {
           newProperties,
       });
 
+      if (editingProperty.type !== editPropertyType) {
+        setFilters((current) => current.filter(
+          (filter) => filter.propertyId !== editingProperty.id
+        ));
+
+        if (activeSort?.propertyId === editingProperty.id) {
+          setActiveSort(null);
+        }
+      }
+
       setEditingProperty(null);
     } catch (error) {
       console.error(
@@ -887,6 +1137,14 @@ export default function DatabasePage() {
           newProperties,
       });
 
+      setFilters((current) => current.filter(
+        (filter) => filter.propertyId !== editingProperty.id
+      ));
+
+      if (activeSort?.propertyId === editingProperty.id) {
+        setActiveSort(null);
+      }
+
       setEditingProperty(null);
     } catch (error) {
       console.error(
@@ -943,7 +1201,7 @@ export default function DatabasePage() {
         <input
           type="number"
           value={
-            value === undefined
+            value === undefined || value === null
               ? ""
               : String(value)
           }
@@ -1042,7 +1300,7 @@ export default function DatabasePage() {
         value={
           typeof value === "string"
             ? value
-            : value === undefined
+            : value === undefined || value === null
               ? ""
               : String(value)
         }
@@ -1195,7 +1453,7 @@ export default function DatabasePage() {
 
             {/* TOOLBAR */}
 
-            <div className="mb-2 flex items-center justify-between border-b border-black/[0.09]">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-black/[0.09]">
 
               <div className="flex items-center gap-2">
 
@@ -1203,7 +1461,22 @@ export default function DatabasePage() {
 
               </div>
 
-              <div className="flex items-center gap-2 pb-1">
+              <div className="relative flex flex-wrap items-center gap-2 pb-1">
+                <div className="flex h-8 items-center rounded-md border border-black/[0.1] bg-white px-2 shadow-sm focus-within:border-[var(--focus)] focus-within:ring-2 focus-within:ring-[var(--focus)]/20">
+                  <span aria-hidden className="mr-1 text-xs text-[var(--subtle)]">⌕</span>
+                  <input
+                    aria-label="Search rows"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search"
+                    className="w-28 bg-transparent text-sm outline-none placeholder:text-[var(--subtle)] sm:w-40"
+                  />
+                  {searchQuery && <button type="button" aria-label="Clear search" onClick={() => setSearchQuery("")} className="ml-1 rounded px-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button>}
+                </div>
+                <button type="button" aria-expanded={filterOpen} aria-haspopup="dialog" onClick={() => { setFilterOpen((current) => !current); setSortOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${filters.length ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-black/[0.1] bg-white text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>≡ Filter{filters.length ? ` · ${filters.length}` : ""}</button>
+                <button type="button" aria-expanded={sortOpen} aria-haspopup="dialog" onClick={() => { setSortOpen((current) => !current); setFilterOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${activeSort ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-black/[0.1] bg-white text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>↕ Sort</button>
+                {filterOpen && <div role="dialog" aria-label="Filter rows" className="absolute right-0 top-10 z-20 w-[min(28rem,calc(100vw-2rem))] rounded-lg border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Filter rows</p><button type="button" aria-label="Close filter menu" onClick={() => setFilterOpen(false)} className="rounded px-1 text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button></div><div className="mt-3 space-y-3">{filters.map((filter) => { const property = database.properties.find((candidate) => candidate.id === filter.propertyId) || database.properties[0]; const operators = filterOperators(property.type); const configuredOptionIds = new Set((property.options || []).map((option) => option.id)); const legacyValues = Array.from(new Set(rows.map((row) => row.values[property.id]).filter((value): value is string => typeof value === "string" && value !== "" && !configuredOptionIds.has(value)))); return <div key={filter.id} data-testid="filter-row" className="rounded-lg border border-[var(--border)] bg-[#fafaf9] p-2"><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"><select aria-label="Filter property" value={filter.propertyId} onChange={(event) => { const nextProperty = database.properties.find((candidate) => candidate.id === event.target.value); if (nextProperty) updateFilter(filter.id, { propertyId: nextProperty.id, operator: filterOperators(nextProperty.type)[0].value, value: undefined }); }} className="proveit-control min-w-0 px-2 py-2 text-sm">{database.properties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select><select aria-label="Filter operator" value={filter.operator} onChange={(event) => updateFilter(filter.id, { operator: event.target.value as FilterOperator, value: operatorNeedsValue(event.target.value as FilterOperator) ? filter.value : undefined })} className="proveit-control min-w-0 px-2 py-2 text-sm">{operators.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select>{operatorNeedsValue(filter.operator) && (property.type === "select" ? <select aria-label="Filter value" value={filter.value || ""} onChange={(event) => updateFilter(filter.id, { value: event.target.value })} className="proveit-control min-w-0 px-2 py-2 text-sm"><option value="">Choose…</option>{(property.options || []).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}{legacyValues.map((value) => <option key={value} value={value}>{`Legacy: ${value}`}</option>)}</select> : <input aria-label="Filter value" type={property.type === "number" ? "number" : property.type === "date" ? "date" : "text"} value={filter.value || ""} onChange={(event) => updateFilter(filter.id, { value: event.target.value })} placeholder="Value" className="proveit-control min-w-0 px-2 py-2 text-sm" />)}{!operatorNeedsValue(filter.operator) && <span className="hidden sm:block" />}<button type="button" aria-label="Remove filter" onClick={() => setFilters((current) => current.filter((candidate) => candidate.id !== filter.id))} className="rounded-md px-2 text-sm text-[var(--subtle)] hover:bg-red-50 hover:text-[var(--danger)]">×</button></div></div>; })}</div><div className="mt-4 flex items-center justify-between gap-2"><button type="button" onClick={addFilter} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">+ Add filter</button><div className="flex gap-2"><button type="button" onClick={() => setFilters([])} disabled={!filters.length} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">Clear all</button><button type="button" onClick={() => setFilterOpen(false)} className="proveit-primary-button min-h-8 px-2.5 py-1 text-xs">Done</button></div></div></div>}
+                {sortOpen && <div role="dialog" aria-label="Sort rows" className="absolute right-0 top-10 z-20 w-72 rounded-lg border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Sort rows</p><button type="button" aria-label="Close sort menu" onClick={() => setSortOpen(false)} className="rounded px-1 text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button></div><label className="mt-3 block text-xs font-medium text-[var(--muted)]">Property<select aria-label="Sort property" value={activeSort?.propertyId || ""} onChange={(event) => { const propertyId = event.target.value; setActiveSort(propertyId ? { propertyId, direction: activeSort?.direction || "asc" } : null); }} className="proveit-control mt-1.5 w-full px-2.5 py-2 text-sm"><option value="">Choose a property</option>{database.properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label>{activeSort && (() => { const property = database.properties.find((candidate) => candidate.id === activeSort.propertyId); return property ? <label className="mt-3 block text-xs font-medium text-[var(--muted)]">Direction<select aria-label="Sort direction" value={activeSort.direction} onChange={(event) => setActiveSort({ ...activeSort, direction: event.target.value as SortDirection })} className="proveit-control mt-1.5 w-full px-2.5 py-2 text-sm"><option value="asc">{directionLabel(property.type, "asc")}</option><option value="desc">{directionLabel(property.type, "desc")}</option></select></label> : null; })()}<div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setActiveSort(null)} disabled={!activeSort} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">Clear sort</button><button type="button" onClick={() => setSortOpen(false)} className="proveit-primary-button min-h-8 px-2.5 py-1 text-xs">Done</button></div></div>}
                 <button
                   type="button"
                   onClick={createRow}
@@ -1308,7 +1581,7 @@ export default function DatabasePage() {
 
                 <tbody>
 
-                  {rows.map(
+                  {displayRows.map(
                     (row) => (
 
                       <tr
@@ -1418,10 +1691,11 @@ export default function DatabasePage() {
             </div>
 
             <div className="mt-3 text-xs text-gray-400">
-              {rows.length}{" "}
-              {rows.length === 1
+              {displayRows.length}{" "}
+              {displayRows.length === 1
                 ? "row"
                 : "rows"}
+              {displayRows.length !== rows.length && ` of ${rows.length}`}
             </div>
 
           </div>
