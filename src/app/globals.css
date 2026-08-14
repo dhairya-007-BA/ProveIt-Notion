@@ -7,11 +7,13 @@
   --sidebar: #f7f7f5;
   --hover: #efefed;
   --active: #e9e9e6;
+  --selected: #e7f0fb;
   --border: rgba(55, 53, 47, 0.14);
   --muted: #787774;
   --subtle: #9b9a97;
   --accent: #252525;
   --danger: #d44c47;
+  --focus: #7ba8d8;
 }
 
 @theme inline {
@@ -59,6 +61,82 @@ a:focus-visible {
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: 8px;
+}
+
+.proveit-page-title {
+  font-size: clamp(2rem, 3vw, 2.75rem);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.proveit-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.proveit-label {
+  color: var(--subtle);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.proveit-primary-button {
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.55rem 0.8rem;
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+
+.proveit-primary-button:hover {
+  background: #3b3b39;
+}
+
+.proveit-primary-button:active {
+  transform: translateY(1px);
+}
+
+.proveit-secondary-button {
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  padding: 0.55rem 0.8rem;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.proveit-secondary-button:hover {
+  background: var(--hover);
+  color: var(--foreground);
+}
+
+.proveit-priority {
+  border-radius: 4px;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.25rem 0.4rem;
+  text-transform: capitalize;
+}
+
+.proveit-priority-low {
+  background: #edf5ee;
+  color: #356341;
+}
+
+.proveit-priority-medium {
+  background: #f6f0dd;
+  color: #755b24;
+}
+
+.proveit-priority-high,
+.proveit-priority-urgent {
+  background: #f9e6e4;
+  color: #963b35;
 }
 
 .proveit-control {

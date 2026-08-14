@@ -40,7 +40,9 @@ test("workspace dashboard summarizes live task and meeting data", async ({ page 
   await page.getByLabel("Password").fill("database-test-password");
   await page.getByRole("button", { name: "Sign In" }).click();
 
-  await page.goto("/workspaces/company/dashboard");
+  await page.goto("/workspaces/company");
+  await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await expect(page).toHaveURL("/workspaces/company/dashboard");
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   await expect(page.getByText("All tasks")).toBeVisible();
   await expect(page.getByText("Prepare candidate review")).toBeVisible();

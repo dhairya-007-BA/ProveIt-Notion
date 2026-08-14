@@ -202,36 +202,36 @@ export default function WorkspacePage() {
   }
 
   return (
-    <main className="flex min-h-screen bg-[#fbfbfa]">
+    <main className="flex min-h-screen bg-gray-50">
       <Sidebar />
 
-      <section className="flex-1 px-6 py-10 md:px-10">
-        <div className="mx-auto max-w-5xl">
+      <section className="flex-1 p-10">
+        <div className="mx-auto max-w-6xl">
 
           {/* WORKSPACE HEADER */}
 
           <div className="mb-10">
             <div className="flex items-center gap-4">
 
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#e9e9e6] text-2xl">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-gray-200 bg-white text-3xl">
                 {workspace.icon ||
                   "📁"}
               </div>
 
               <div>
-                <p className="text-xs font-medium capitalize text-[#9b9a97]">
+                <p className="text-sm font-medium capitalize text-gray-400">
                   {workspace.kind}{" "}
                   workspace
                 </p>
 
-                <h1 className="text-4xl font-semibold tracking-[-0.03em]">
+                <h1 className="text-3xl font-semibold tracking-tight">
                   {workspace.name}
                 </h1>
               </div>
             </div>
 
             {workspace.description && (
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-[#787774]">
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-gray-500">
                 {
                   workspace.description
                 }
@@ -241,14 +241,7 @@ export default function WorkspacePage() {
 
           {/* WORKSPACE MODULES */}
 
-          <div className="max-w-3xl border-t border-black/[0.09] pt-3">
-
-            <WorkspaceCard
-              href={`/workspaces/${workspaceId}/dashboard`}
-              icon="◫"
-              title="Dashboard"
-              description="Live overview of tasks and meetings in this workspace."
-            />
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
 
             <WorkspaceCard
               href={`/workspaces/${workspaceId}/documents`}
@@ -306,16 +299,27 @@ function WorkspaceCard({
   return (
     <Link
       href={href}
-      className="group flex items-center gap-4 rounded-md px-3 py-3 transition hover:bg-black/[0.045]"
+      className="group rounded-xl border border-gray-200 bg-white p-6 transition hover:border-gray-300 hover:shadow-sm"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#e9e9e6] text-lg">
+      <div className="flex items-start justify-between">
+
+        <div className="text-2xl">
           {icon}
+        </div>
+
+        <span className="text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-gray-500">
+          →
+        </span>
+
       </div>
-      <div className="min-w-0 flex-1">
-        <h2 className="text-sm font-medium">{title}</h2>
-        <p className="mt-0.5 truncate text-sm text-[#787774]">{description}</p>
-      </div>
-      <span className="text-[#9b9a97] transition group-hover:translate-x-0.5">›</span>
+
+      <h2 className="mt-4 font-semibold">
+        {title}
+      </h2>
+
+      <p className="mt-2 text-sm leading-6 text-gray-500">
+        {description}
+      </p>
     </Link>
   );
 }

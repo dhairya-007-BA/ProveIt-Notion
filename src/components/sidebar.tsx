@@ -11,6 +11,15 @@ import { getAccessibleWorkspaces } from "@/lib/accessible-workspaces";
 import { Workspace } from "@/types/workspace";
 import { db } from "@/lib/firebase";
 
+const modules = [
+  { segment: "dashboard", label: "Dashboard", icon: "◫" },
+  { segment: "documents", label: "Documents", icon: "▤" },
+  { segment: "tasks", label: "Tasks", icon: "✓" },
+  { segment: "meetings", label: "Meetings", icon: "◷" },
+  { segment: "databases", label: "Databases", icon: "▦" },
+  { segment: "activity", label: "Recent activity", icon: "◦" },
+];
+
 export default function Sidebar() {
   const { profile, firebaseUser } = useAuth();
   const pathname = usePathname();
@@ -25,80 +34,28 @@ export default function Sidebar() {
   }, [firebaseUser, workspaceId]);
 
   useEffect(() => {
-    if (!profile) {
-      return;
-    }
+    if (!profile) return;
+    let active = true;
+    const currentProfile = profile;
 
     async function loadWorkspaces() {
       try {
         setLoading(true);
-        setWorkspaces(await getAccessibleWorkspaces(profile!));
+        const accessible = await getAccessibleWorkspaces(currentProfile);
+        if (active) setWorkspaces(accessible);
       } catch (error) {
         console.error("Failed to load accessible workspaces:", error);
-        setWorkspaces([]);
+        if (active) setWorkspaces([]);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
 
-    loadWorkspaces();
+    void loadWorkspaces();
+    return () => { active = false; };
   }, [profile]);
 
-  return (
-    <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-black/[0.09] bg-[#f7f7f5] px-2.5 py-3 text-[#37352f] max-md:hidden">
-      <Link
-        href="/"
-        className="mb-5 flex items-center gap-2.5 rounded-md px-2 py-1.5 transition hover:bg-black/[0.05]"
-      >
-        <ProveItLogo className="h-7 w-7" priority />
-        <span className="text-sm font-semibold tracking-[-0.01em]">ProveIt</span>
-      </Link>
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
-      <nav className="min-h-0 flex-1 overflow-y-auto">
-        {workspaceId && <Link href={`/workspaces/${workspaceId}/inbox`} className="mb-3 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-black/[0.055]"><span>◉</span><span>Inbox</span>{unread > 0 && <span aria-label={`${unread} unread notifications`} className="ml-auto rounded-full bg-[#e1e1de] px-1.5 py-0.5 text-[11px]">{unread}</span>}</Link>}
-        <p className="mb-1 px-2 py-1 text-[11px] font-medium text-[#787774]">WORKSPACES</p>
-        {loading ? (
-          <p className="px-2 py-2 text-sm text-[#9b9a97]">Loading…</p>
-        ) : workspaces.length === 0 ? (
-          <p className="px-2 py-2 text-sm text-[#9b9a97]">No workspaces available.</p>
-        ) : (
-          <div className="space-y-0.5">
-            {workspaces.map((workspace) => (
-              <Link
-                key={workspace.id}
-                href={`/workspaces/${workspace.id}`}
-                className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition hover:bg-black/[0.055]"
-              >
-                <span className="grid h-5 w-5 shrink-0 place-items-center text-base leading-none">
-                  {workspace.icon || "▦"}
-                </span>
-                <span className="truncate">{workspace.name}</span>
-                <span className="ml-auto opacity-0 transition group-hover:opacity-40">›</span>
-              </Link>
-            ))}
-          </div>
-        )}
-
-        {profile?.group === "bod" && (
-          <div className="mt-6 border-t border-black/[0.07] pt-4">
-            <p className="mb-1 px-2 py-1 text-[11px] font-medium text-[#787774]">ADMINISTRATION</p>
-            <Link href="/admin/employees" className="block rounded-md px-2 py-1.5 text-sm hover:bg-black/[0.055]">Employees</Link>
-            <Link href="/admin/workspaces" className="block rounded-md px-2 py-1.5 text-sm hover:bg-black/[0.055]">Workspace settings</Link>
-          </div>
-        )}
-      </nav>
-
-      {profile && (
-        <div className="mt-3 flex items-center gap-2 rounded-md border-t border-black/[0.07] px-2 pt-3">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-[#e7e7e4] text-xs font-semibold text-[#5f5e5a]">
-            {profile.name.slice(0, 1).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-medium">{profile.name}</p>
-            <p className="truncate text-[11px] text-[#9b9a97]">{profile.employeeId}</p>
-          </div>
-        </div>
-      )}
-    </aside>
-  );
+  return <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--sidebar)] px-2 py-3 text-[var(--foreground)] md:flex"><Link href="/" className="mb-5 flex items-center gap-2 rounded-md px-2 py-1.5 transition hover:bg-[var(--hover)]"><ProveItLogo className="h-6 w-6" priority /><span className="text-sm font-semibold tracking-[-0.01em]">ProveIt</span></Link><nav className="min-h-0 flex-1 overflow-y-auto"><Link href={workspaceId ? `/workspaces/${workspaceId}/inbox` : "/"} className={`mb-4 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition ${pathname.includes("/inbox") ? "bg-[var(--selected)]" : "hover:bg-[var(--hover)]"}`}><span aria-hidden>◉</span><span>Inbox</span>{unread > 0 && <span aria-label={`${unread} unread notifications`} className="ml-auto rounded-full bg-[var(--active)] px-1.5 py-0.5 text-[11px]">{unread}</span>}</Link><p className="proveit-label mb-1 px-2">Workspaces</p>{loading ? <p className="px-2 py-2 text-sm text-[var(--subtle)]">Loading…</p> : <div className="space-y-0.5">{workspaces.map((workspace) => { const workspaceHref = `/workspaces/${workspace.id}`; const isCurrentWorkspace = workspace.id === workspaceId; return <div key={workspace.id}><Link href={workspaceHref} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition ${isCurrentWorkspace && pathname === workspaceHref ? "bg-[var(--selected)] font-medium" : "hover:bg-[var(--hover)]"}`}><span className="grid h-5 w-5 shrink-0 place-items-center text-sm">{workspace.icon || "▦"}</span><span className="truncate">{workspace.name}</span><span aria-hidden className="ml-auto text-xs text-[var(--subtle)]">{isCurrentWorkspace ? "⌄" : "›"}</span></Link>{isCurrentWorkspace && <div className="mb-2 ml-3 border-l border-black/[0.08] py-1 pl-2">{modules.map((module) => { const href = `${workspaceHref}/${module.segment}`; return <Link key={module.segment} href={href} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition ${isActive(href) ? "bg-[var(--selected)] font-medium text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}><span aria-hidden className="w-3 text-center text-xs">{module.icon}</span>{module.label}</Link>; })}</div>}</div>; })}</div>}{profile?.group === "bod" && <div className="mt-6 border-t border-black/[0.08] pt-4"><p className="proveit-label mb-1 px-2">Administration</p><Link href="/admin/employees" className={`block rounded-md px-2 py-1.5 text-sm transition ${pathname.startsWith("/admin/employees") ? "bg-[var(--selected)] font-medium" : "hover:bg-[var(--hover)]"}`}>Employees</Link><Link href="/admin/workspaces" className={`block rounded-md px-2 py-1.5 text-sm transition ${pathname.startsWith("/admin/workspaces") ? "bg-[var(--selected)] font-medium" : "hover:bg-[var(--hover)]"}`}>Workspace settings</Link></div>}</nav>{profile && <div className="mt-3 flex items-center gap-2 border-t border-black/[0.08] px-2 pt-3"><div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--active)] text-xs font-semibold text-[var(--muted)]">{profile.name.slice(0, 1).toUpperCase()}</div><div className="min-w-0"><p className="truncate text-xs font-medium">{profile.name}</p><p className="truncate text-[11px] text-[var(--subtle)]">{profile.employeeId}</p></div></div>}</aside>;
 }
