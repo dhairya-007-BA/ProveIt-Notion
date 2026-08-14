@@ -45,7 +45,7 @@ test("workspace dashboard summarizes live task and meeting data", async ({ page 
   await expect(page).toHaveURL("/workspaces/company/dashboard");
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   await expect(page.getByText("All tasks")).toBeVisible();
-  await expect(page.getByText("Prepare candidate review")).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Prepare candidate review/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Candidate review/ })).toBeVisible();
 });
 

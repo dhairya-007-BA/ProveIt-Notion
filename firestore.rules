@@ -21,7 +21,7 @@ service cloud.firestore {
 
     function activeUser() {
       return userExists()
-        && userData().active == true;
+        && userData().get("active", false) == true;
     }
 
     function isBOD() {
@@ -39,7 +39,7 @@ service cloud.firestore {
     function hasActiveMembership(workspaceId) {
       return activeUser()
         && exists(membershipPath(workspaceId))
-        && get(membershipPath(workspaceId)).data.active == true;
+        && get(membershipPath(workspaceId)).data.get("active", false) == true;
     }
 
     function canAccessWorkspace(workspaceId) {
@@ -61,14 +61,14 @@ service cloud.firestore {
 
     function canUserAccessWorkspace(userId, workspaceId) {
       return exists(userPathFor(userId))
-        && get(userPathFor(userId)).data.active == true
+        && get(userPathFor(userId)).data.get("active", false) == true
         && (
           workspaceId == "company"
           || get(userPathFor(userId)).data.get("role", "") == "bod"
           || get(userPathFor(userId)).data.get("group", "") == "bod"
           || (
             exists(membershipPathFor(workspaceId, userId))
-            && get(membershipPathFor(workspaceId, userId)).data.active == true
+            && get(membershipPathFor(workspaceId, userId)).data.get("active", false) == true
           )
         );
     }
@@ -380,9 +380,16 @@ match /documents/{documentId} {
     match /comments/{commentId} {
       allow read: if resource.data.keys().hasAll(["workspaceId"])
         && canAccessWorkspace(resource.data.workspaceId);
-      allow create: if canAccessWorkspace(request.resource.data.workspaceId)
+      allow create: if request.resource.data.keys().hasAll(["workspaceId", "authorUid", "entityType", "entityId"])
+        && canAccessWorkspace(request.resource.data.workspaceId)
         && request.resource.data.authorUid == request.auth.uid;
-      allow update, delete: if canAccessWorkspace(resource.data.workspaceId)
+      allow update: if resource.data.keys().hasAll(["workspaceId", "authorUid"])
+        && canAccessWorkspace(resource.data.workspaceId)
+        && resource.data.authorUid == request.auth.uid
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.authorUid == resource.data.authorUid;
+      allow delete: if resource.data.keys().hasAll(["workspaceId", "authorUid"])
+        && canAccessWorkspace(resource.data.workspaceId)
         && resource.data.authorUid == request.auth.uid;
     }
 
@@ -390,13 +397,16 @@ match /documents/{documentId} {
       allow read: if activeUser()
         && resource.data.keys().hasAll(["recipientUid"])
         && resource.data.recipientUid == request.auth.uid;
-      allow create: if canAccessWorkspace(request.resource.data.workspaceId)
+      allow create: if request.resource.data.keys().hasAll(["workspaceId", "recipientUid", "actorUid", "entityType", "entityId"])
+        && canAccessWorkspace(request.resource.data.workspaceId)
         && request.resource.data.actorUid == request.auth.uid
         && canUserAccessWorkspace(
           request.resource.data.recipientUid,
           request.resource.data.workspaceId
         );
-      allow update: if activeUser() && resource.data.recipientUid == request.auth.uid
+      allow update: if activeUser()
+        && resource.data.keys().hasAll(["recipientUid"])
+        && resource.data.recipientUid == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readAt", "archivedAt"]);
       allow delete: if false;
     }

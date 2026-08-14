@@ -60,7 +60,10 @@ export async function POST(
     // Only an authenticated, active BOD member
     // may provision another employee.
     const administrator =
-      await requireBOD(request);
+      await requireBOD(
+        request,
+        "create-employee"
+      );
 
     const body =
       (await request.json()) as CreateEmployeeBody;

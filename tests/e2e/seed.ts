@@ -19,20 +19,21 @@ const app = initializeApp({ projectId });
 const auth = getAuth(app);
 const firestore = getFirestore(app);
 
-async function ensureTestUser() {
+async function ensureTestUser(uid: string, id: string, password: string) {
   try {
-    await auth.getUser(userId);
+    await auth.getUser(uid);
   } catch {
     await auth.createUser({
-      uid: userId,
-      email: `${employeeId}@auth.proveit.internal`,
-      password: "database-test-password",
+      uid,
+      email: `${id}@auth.proveit.internal`,
+      password,
     });
   }
 }
 
 async function main() {
-  await ensureTestUser();
+  await ensureTestUser(userId, employeeId, "database-test-password");
+  await ensureTestUser("mentioned-user", "mentioned-user", "mentioned-user-password");
 
   await firestore.doc(`users/${userId}`).set({
     active: true,
@@ -48,6 +49,17 @@ async function main() {
     role: "business_intern",
     mustChangePassword: false,
   });
+  await firestore.doc("workspaces/company").set({
+    name: "Company",
+    slug: "company",
+    kind: "company",
+    icon: "🏢",
+    description: "The company workspace used by the emulator test suite.",
+    active: true,
+    createdBy: userId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
   await firestore
     .doc(`workspaceMemberships/company_${userId}`)
     .set({
@@ -57,6 +69,13 @@ async function main() {
       role: "member",
       createdBy: userId,
     });
+  await firestore.doc("workspaceMemberships/company_mentioned-user").set({
+    workspaceId: "company",
+    userId: "mentioned-user",
+    active: true,
+    role: "member",
+    createdBy: userId,
+  });
   await firestore.doc("databases/database-e2e").set({
     name: "Candidate pipeline",
     description: "A local emulator database",

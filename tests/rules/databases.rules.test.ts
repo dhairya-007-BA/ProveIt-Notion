@@ -6,10 +6,15 @@ import {
   RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
+  query,
   setDoc,
+  updateDoc,
   writeBatch,
+  where,
 } from "firebase/firestore";
 import {
   afterAll,
@@ -225,6 +230,7 @@ describe("database Firestore rules", () => {
     }));
     await assertSucceeds(setDoc(doc(firestore, "notifications", "notification-1"), {
       workspaceId: "business", recipientUid: "business-recipient", actorUid: "company-member",
+      entityType: "meeting", entityId: "meeting-1",
     }));
   });
 
@@ -232,7 +238,50 @@ describe("database Firestore rules", () => {
     const firestore = testEnv.authenticatedContext("company-member").firestore();
     await assertFails(setDoc(doc(firestore, "notifications", "notification-cross-workspace"), {
       workspaceId: "business", recipientUid: "other-member", actorUid: "company-member",
+      entityType: "meeting", entityId: "meeting-1",
     }));
+  });
+
+  it("allows members to query and reply to comments in their workspace", async () => {
+    const firestore = testEnv.authenticatedContext("company-member").firestore();
+    await assertSucceeds(setDoc(doc(firestore, "comments", "comment-parent"), {
+      workspaceId: "business", entityType: "task", entityId: "task-1", authorUid: "company-member",
+    }));
+    await assertSucceeds(getDocs(query(collection(firestore, "comments"), where("workspaceId", "==", "business"), where("entityId", "==", "task-1"))));
+    await assertSucceeds(setDoc(doc(firestore, "comments", "comment-reply"), {
+      workspaceId: "business", entityType: "task", entityId: "task-1", authorUid: "company-member", parentCommentId: "comment-parent",
+    }));
+  });
+
+  it("rejects comment reads and creates from a different workspace, inactive users, and unauthenticated users", async () => {
+    const owner = testEnv.authenticatedContext("company-member").firestore();
+    await testEnv.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "comments", "comment-business"), {
+      workspaceId: "business", entityType: "task", entityId: "task-1", authorUid: "company-member",
+    }));
+    const other = testEnv.authenticatedContext("other-member").firestore();
+    const inactive = testEnv.authenticatedContext("inactive-business-member").firestore();
+    const anonymous = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(other, "comments", "comment-business")));
+    await assertFails(setDoc(doc(other, "comments", "comment-other"), { workspaceId: "business", entityType: "task", entityId: "task-1", authorUid: "other-member" }));
+    await assertFails(setDoc(doc(inactive, "comments", "comment-inactive"), { workspaceId: "business", entityType: "task", entityId: "task-1", authorUid: "inactive-business-member" }));
+    await assertFails(setDoc(doc(anonymous, "comments", "comment-anonymous"), { workspaceId: "business", entityType: "task", entityId: "task-1", authorUid: null }));
+    await assertSucceeds(getDoc(doc(owner, "comments", "comment-business")));
+  });
+
+  it("allows only the recipient to read and mark their notification state", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "notifications", "notification-recipient"), {
+      workspaceId: "business", recipientUid: "business-recipient", actorUid: "company-member", entityType: "task", entityId: "task-1", readAt: null, archivedAt: null,
+    }));
+    const recipient = testEnv.authenticatedContext("business-recipient").firestore();
+    const other = testEnv.authenticatedContext("company-member").firestore();
+    const inactive = testEnv.authenticatedContext("inactive-business-member").firestore();
+    const anonymous = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(getDoc(doc(recipient, "notifications", "notification-recipient")));
+    await assertSucceeds(updateDoc(doc(recipient, "notifications", "notification-recipient"), { readAt: new Date() }));
+    await assertFails(updateDoc(doc(recipient, "notifications", "notification-recipient"), { workspaceId: "technology" }));
+    await assertFails(getDoc(doc(other, "notifications", "notification-recipient")));
+    await assertFails(getDoc(doc(inactive, "notifications", "notification-recipient")));
+    await assertFails(getDoc(doc(anonymous, "notifications", "notification-recipient")));
   });
 });
 

@@ -43,7 +43,10 @@ export async function PATCH(
      * Only authenticated BOD users
      * may initiate password resets.
      */
-    await requireBOD(request);
+    await requireBOD(
+      request,
+      "reset-employee-password"
+    );
 
     const { uid } =
       await context.params;

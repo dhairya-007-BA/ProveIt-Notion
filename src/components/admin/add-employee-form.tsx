@@ -7,6 +7,8 @@ import {
 
 import { User } from "firebase/auth";
 
+import { authenticatedRequest } from "@/lib/authenticated-request";
+
 type EmployeeRole =
   | "business_intern"
   | "tech_intern"
@@ -50,10 +52,8 @@ export default function AddEmployeeForm({
     setLoading(true);
 
     try {
-      const idToken =
-        await firebaseUser.getIdToken();
-
-      const response = await fetch(
+      const response = await authenticatedRequest(
+        firebaseUser,
         "/api/admin/employees",
         {
           method: "POST",
@@ -62,8 +62,6 @@ export default function AddEmployeeForm({
             "Content-Type":
               "application/json",
 
-            Authorization:
-              `Bearer ${idToken}`,
           },
 
           body: JSON.stringify({
