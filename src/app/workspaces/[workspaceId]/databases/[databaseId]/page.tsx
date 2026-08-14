@@ -14,6 +14,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 
 import Sidebar from "@/components/sidebar";
@@ -42,7 +43,10 @@ interface DatabaseProperty {
 interface SelectOption {
   id: string;
   name: string;
+  color?: SemanticColor;
 }
+
+type SemanticColor = "gray" | "blue" | "teal" | "green" | "yellow" | "orange" | "red" | "purple" | "pink";
 
 interface DatabaseData {
   name: string;
@@ -92,6 +96,25 @@ interface DatabaseFilter {
   operator: FilterOperator;
   value?: string;
 }
+
+interface DatabaseView {
+  id: string;
+  name: string;
+  databaseId: string;
+  workspaceId: string;
+  type: "table";
+  filters?: DatabaseFilter[];
+  sort?: ActiveSort | null;
+  visiblePropertyIds?: string[];
+  propertyOrder?: string[];
+  createdBy: string;
+}
+
+const semanticColors: SemanticColor[] = ["gray", "blue", "teal", "green", "yellow", "orange", "red", "purple", "pink"];
+const semanticColorStyle = (color?: SemanticColor) => ({
+  backgroundColor: `var(--tag-${color || "gray"}-bg)`,
+  color: `var(--tag-${color || "gray"}-fg)`,
+});
 
 const searchablePropertyTypes: PropertyType[] = [
   "title",
@@ -317,6 +340,11 @@ export default function DatabasePage() {
   const [filterOpen, setFilterOpen] =
     useState(false);
 
+  const [views, setViews] = useState<DatabaseView[]>([]);
+  const [activeViewId, setActiveViewId] = useState("default");
+  const [visiblePropertyIds, setVisiblePropertyIds] = useState<string[]>([]);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
+
   const [editingOptionId, setEditingOptionId] =
     useState<string | null>(null);
 
@@ -325,7 +353,10 @@ export default function DatabasePage() {
 
   const displayRows = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
-    const properties = database?.properties || [];
+    const allProperties = database?.properties || [];
+    const properties = visiblePropertyIds.length
+      ? allProperties.filter((property) => visiblePropertyIds.includes(property.id))
+      : allProperties;
     const searchedRows = normalizedSearch
       ? rows.filter((row) => properties.some((property) =>
         searchablePropertyTypes.includes(property.type) &&
@@ -351,7 +382,13 @@ export default function DatabasePage() {
     return [...filteredRows].sort((left, right) =>
       compareRows(left, right, property, activeSort.direction)
     );
-  }, [activeSort, database?.properties, filters, rows, searchQuery]);
+  }, [activeSort, database?.properties, filters, rows, searchQuery, visiblePropertyIds]);
+
+  const visibleProperties = useMemo(() => {
+    const allProperties = database?.properties || [];
+    const ids = visiblePropertyIds.length ? visiblePropertyIds : allProperties.map((property) => property.id);
+    return ids.map((id) => allProperties.find((property) => property.id === id)).filter((property): property is DatabaseProperty => Boolean(property));
+  }, [database?.properties, visiblePropertyIds]);
 
   function addFilter() {
     const property = database?.properties[0];
@@ -501,6 +538,74 @@ export default function DatabasePage() {
     firebaseUser,
     databaseId,
   ]);
+
+  useEffect(() => {
+    if (!firebaseUser || !databaseId) return;
+    return onSnapshot(
+      query(collection(db, "databaseViews"), where("databaseId", "==", databaseId)),
+      (snapshot) => setViews(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as DatabaseView))),
+      () => setError("Saved views could not be loaded.")
+    );
+  }, [firebaseUser, databaseId]);
+
+  function applyView(view: DatabaseView | null) {
+    const properties = database?.properties || [];
+    const validIds = new Set(properties.map((property) => property.id));
+    const nextFilters = (view?.filters || []).filter((filter) => validIds.has(filter.propertyId)).map((filter) => {
+      const property = properties.find((candidate) => candidate.id === filter.propertyId)!;
+      return filterOperators(property.type).some((operator) => operator.value === filter.operator)
+        ? filter : { ...filter, operator: filterOperators(property.type)[0].value, value: undefined };
+    });
+    setFilters(nextFilters);
+    setActiveSort(view?.sort && validIds.has(view.sort.propertyId) ? view.sort : null);
+    setVisiblePropertyIds((view?.propertyOrder || view?.visiblePropertyIds || properties.map((property) => property.id)).filter((id) => validIds.has(id)));
+  }
+
+  function switchView(viewId: string) {
+    setActiveViewId(viewId);
+    applyView(viewId === "default" ? null : views.find((view) => view.id === viewId) || null);
+  }
+
+  async function createView() {
+    if (!database || !firebaseUser) return;
+    const name = window.prompt("Name this view", "Untitled view")?.trim();
+    if (!name) return;
+    const created = await addDoc(collection(db, "databaseViews"), {
+      name, databaseId, workspaceId: database.workspaceId, type: "table", filters,
+      sort: activeSort, visiblePropertyIds: visibleProperties.map((property) => property.id),
+      propertyOrder: visibleProperties.map((property) => property.id), createdBy: firebaseUser.uid,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    });
+    setActiveViewId(created.id);
+  }
+
+  async function saveActiveView() {
+    if (activeViewId === "default" || !database) return;
+    await updateDoc(doc(db, "databaseViews", activeViewId), {
+      filters, sort: activeSort, visiblePropertyIds: visibleProperties.map((property) => property.id),
+      propertyOrder: visibleProperties.map((property) => property.id), updatedAt: serverTimestamp(),
+    });
+  }
+
+  async function renameActiveView() {
+    const view = views.find((candidate) => candidate.id === activeViewId);
+    const name = view && window.prompt("Rename view", view.name)?.trim();
+    if (view && name) await updateDoc(doc(db, "databaseViews", view.id), { name, updatedAt: serverTimestamp() });
+  }
+
+  async function duplicateActiveView() {
+    if (activeViewId === "default") { await createView(); return; }
+    const view = views.find((candidate) => candidate.id === activeViewId);
+    if (!view || !firebaseUser) return;
+    const created = await addDoc(collection(db, "databaseViews"), { ...view, name: `${view.name} copy`, createdBy: firebaseUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    setActiveViewId(created.id);
+  }
+
+  async function deleteActiveView() {
+    if (activeViewId === "default") return;
+    await deleteDoc(doc(db, "databaseViews", activeViewId));
+    switchView("default");
+  }
 
   /*
    * Database name
@@ -1045,6 +1150,11 @@ export default function DatabasePage() {
     setEditingOptionName("");
   }
 
+  async function recolorSelectOption(option: SelectOption, color: SemanticColor) {
+    if (!editingProperty || editingProperty.type !== "select") return;
+    await saveSelectOptions(editingProperty.id, (editingProperty.options || []).map((candidate) => candidate.id === option.id ? { ...candidate, color } : candidate));
+  }
+
   async function deleteSelectOption(option: SelectOption) {
     if (!editingProperty || editingProperty.type !== "select") {
       return;
@@ -1269,7 +1379,9 @@ export default function DatabasePage() {
               event.target.value
             )
           }
-          className="h-full w-full bg-transparent px-3 py-2 text-sm outline-none"
+          data-select-color={matchingOption?.color || "gray"}
+          style={semanticColorStyle(matchingOption?.color)}
+          className="h-full w-full rounded px-3 py-2 text-sm outline-none"
         >
           <option value="">Select...</option>
           {!matchingOption && stringValue && (
@@ -1455,10 +1567,13 @@ export default function DatabasePage() {
 
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-black/[0.09]">
 
-              <div className="flex items-center gap-2">
-
+              <div className="flex min-w-0 items-center gap-2">
                 <span className="border-b-2 border-[#37352f] px-3 py-2 text-sm font-medium text-[#37352f]">▦ Table</span>
-
+                <select aria-label="Saved view" value={activeViewId} onChange={(event) => switchView(event.target.value)} className="max-w-44 truncate rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm">
+                  <option value="default">All records</option>
+                  {views.map((view) => <option key={view.id} value={view.id}>{view.name}</option>)}
+                </select>
+                <button type="button" onClick={() => void createView()} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">+ View</button>
               </div>
 
               <div className="relative flex flex-wrap items-center gap-2 pb-1">
@@ -1473,8 +1588,11 @@ export default function DatabasePage() {
                   />
                   {searchQuery && <button type="button" aria-label="Clear search" onClick={() => setSearchQuery("")} className="ml-1 rounded px-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button>}
                 </div>
-                <button type="button" aria-expanded={filterOpen} aria-haspopup="dialog" onClick={() => { setFilterOpen((current) => !current); setSortOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${filters.length ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-black/[0.1] bg-white text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>≡ Filter{filters.length ? ` · ${filters.length}` : ""}</button>
+                {activeViewId !== "default" && <><button type="button" onClick={() => void saveActiveView()} className="rounded-md border border-[var(--border)] bg-white px-2.5 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--hover)]">Save view</button><button type="button" onClick={() => void renameActiveView()} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">Rename</button><button type="button" onClick={() => void duplicateActiveView()} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">Duplicate</button><button type="button" onClick={() => void deleteActiveView()} className="text-sm text-[var(--danger)]">Delete</button></>}
+                <button type="button" aria-expanded={propertiesOpen} onClick={() => { setPropertiesOpen((current) => !current); setFilterOpen(false); setSortOpen(false); }} className="rounded-md border border-black/[0.1] bg-white px-2.5 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--hover)]">Properties</button>
+                <button type="button" aria-expanded={filterOpen} aria-haspopup="dialog" onClick={() => { setFilterOpen((current) => !current); setSortOpen(false); setPropertiesOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${filters.length ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-black/[0.1] bg-white text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>≡ Filter{filters.length ? ` · ${filters.length}` : ""}</button>
                 <button type="button" aria-expanded={sortOpen} aria-haspopup="dialog" onClick={() => { setSortOpen((current) => !current); setFilterOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${activeSort ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-black/[0.1] bg-white text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>↕ Sort</button>
+                {propertiesOpen && <div role="dialog" aria-label="Properties" className="absolute right-0 top-10 z-20 w-64 rounded-lg border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Properties</p><button type="button" aria-label="Close properties menu" onClick={() => setPropertiesOpen(false)}>×</button></div><p className="mt-1 text-xs text-[var(--muted)]">Hidden properties remain filterable and editable from row details; table search uses visible text properties.</p><div className="mt-3 space-y-2">{database.properties.map((property) => <label key={property.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleProperties.some((candidate) => candidate.id === property.id)} onChange={(event) => setVisiblePropertyIds((current) => { const ids = current.length ? current : database.properties.map((candidate) => candidate.id); return event.target.checked ? [...ids, property.id] : ids.filter((id) => id !== property.id); })} />{property.name}</label>)}</div></div>}
                 {filterOpen && <div role="dialog" aria-label="Filter rows" className="absolute right-0 top-10 z-20 w-[min(28rem,calc(100vw-2rem))] rounded-lg border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Filter rows</p><button type="button" aria-label="Close filter menu" onClick={() => setFilterOpen(false)} className="rounded px-1 text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button></div><div className="mt-3 space-y-3">{filters.map((filter) => { const property = database.properties.find((candidate) => candidate.id === filter.propertyId) || database.properties[0]; const operators = filterOperators(property.type); const configuredOptionIds = new Set((property.options || []).map((option) => option.id)); const legacyValues = Array.from(new Set(rows.map((row) => row.values[property.id]).filter((value): value is string => typeof value === "string" && value !== "" && !configuredOptionIds.has(value)))); return <div key={filter.id} data-testid="filter-row" className="rounded-lg border border-[var(--border)] bg-[#fafaf9] p-2"><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"><select aria-label="Filter property" value={filter.propertyId} onChange={(event) => { const nextProperty = database.properties.find((candidate) => candidate.id === event.target.value); if (nextProperty) updateFilter(filter.id, { propertyId: nextProperty.id, operator: filterOperators(nextProperty.type)[0].value, value: undefined }); }} className="proveit-control min-w-0 px-2 py-2 text-sm">{database.properties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select><select aria-label="Filter operator" value={filter.operator} onChange={(event) => updateFilter(filter.id, { operator: event.target.value as FilterOperator, value: operatorNeedsValue(event.target.value as FilterOperator) ? filter.value : undefined })} className="proveit-control min-w-0 px-2 py-2 text-sm">{operators.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select>{operatorNeedsValue(filter.operator) && (property.type === "select" ? <select aria-label="Filter value" value={filter.value || ""} onChange={(event) => updateFilter(filter.id, { value: event.target.value })} className="proveit-control min-w-0 px-2 py-2 text-sm"><option value="">Choose…</option>{(property.options || []).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}{legacyValues.map((value) => <option key={value} value={value}>{`Legacy: ${value}`}</option>)}</select> : <input aria-label="Filter value" type={property.type === "number" ? "number" : property.type === "date" ? "date" : "text"} value={filter.value || ""} onChange={(event) => updateFilter(filter.id, { value: event.target.value })} placeholder="Value" className="proveit-control min-w-0 px-2 py-2 text-sm" />)}{!operatorNeedsValue(filter.operator) && <span className="hidden sm:block" />}<button type="button" aria-label="Remove filter" onClick={() => setFilters((current) => current.filter((candidate) => candidate.id !== filter.id))} className="rounded-md px-2 text-sm text-[var(--subtle)] hover:bg-red-50 hover:text-[var(--danger)]">×</button></div></div>; })}</div><div className="mt-4 flex items-center justify-between gap-2"><button type="button" onClick={addFilter} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">+ Add filter</button><div className="flex gap-2"><button type="button" onClick={() => setFilters([])} disabled={!filters.length} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">Clear all</button><button type="button" onClick={() => setFilterOpen(false)} className="proveit-primary-button min-h-8 px-2.5 py-1 text-xs">Done</button></div></div></div>}
                 {sortOpen && <div role="dialog" aria-label="Sort rows" className="absolute right-0 top-10 z-20 w-72 rounded-lg border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Sort rows</p><button type="button" aria-label="Close sort menu" onClick={() => setSortOpen(false)} className="rounded px-1 text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button></div><label className="mt-3 block text-xs font-medium text-[var(--muted)]">Property<select aria-label="Sort property" value={activeSort?.propertyId || ""} onChange={(event) => { const propertyId = event.target.value; setActiveSort(propertyId ? { propertyId, direction: activeSort?.direction || "asc" } : null); }} className="proveit-control mt-1.5 w-full px-2.5 py-2 text-sm"><option value="">Choose a property</option>{database.properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label>{activeSort && (() => { const property = database.properties.find((candidate) => candidate.id === activeSort.propertyId); return property ? <label className="mt-3 block text-xs font-medium text-[var(--muted)]">Direction<select aria-label="Sort direction" value={activeSort.direction} onChange={(event) => setActiveSort({ ...activeSort, direction: event.target.value as SortDirection })} className="proveit-control mt-1.5 w-full px-2.5 py-2 text-sm"><option value="asc">{directionLabel(property.type, "asc")}</option><option value="desc">{directionLabel(property.type, "desc")}</option></select></label> : null; })()}<div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setActiveSort(null)} disabled={!activeSort} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">Clear sort</button><button type="button" onClick={() => setSortOpen(false)} className="proveit-primary-button min-h-8 px-2.5 py-1 text-xs">Done</button></div></div>}
                 <button
@@ -1502,7 +1620,7 @@ export default function DatabasePage() {
 
                   <tr className="bg-[#fbfbfa]">
 
-                    {database.properties.map(
+                    {visibleProperties.map(
                       (property) => (
 
                         <th
@@ -1589,7 +1707,7 @@ export default function DatabasePage() {
                         className="group transition hover:bg-[#f7f7f5]"
                       >
 
-                        {database.properties.map(
+                        {visibleProperties.map(
                           (property) => (
 
                             <td
@@ -1663,7 +1781,7 @@ export default function DatabasePage() {
 
                     <td
                       colSpan={
-                        database.properties
+                        visibleProperties
                           .length + 1
                       }
                       className="border-b border-black/[0.09]"
@@ -2000,6 +2118,10 @@ export default function DatabasePage() {
                           {option.name}
                         </span>
                       )}
+
+                      <select aria-label={`Color for ${option.name}`} value={option.color || "gray"} onChange={(event) => void recolorSelectOption(option, event.target.value as SemanticColor)} className="rounded border border-[var(--border)] px-1 py-1 text-xs" style={semanticColorStyle(option.color)}>
+                        {semanticColors.map((color) => <option key={color} value={color}>{color}</option>)}
+                      </select>
 
                       {editingOptionId === option.id ? (
                         <button

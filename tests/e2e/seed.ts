@@ -55,9 +55,17 @@ async function clearDatabaseRows() {
   await batch.commit();
 }
 
+async function clearDatabaseViews() {
+  const views = await firestore.collection("databaseViews").where("databaseId", "==", "database-e2e").get();
+  const batch = firestore.batch();
+  views.docs.forEach((view) => batch.delete(view.ref));
+  if (!views.empty) await batch.commit();
+}
+
 async function main() {
   await clearCollaborationFixtures();
   await clearDatabaseRows();
+  await clearDatabaseViews();
   await ensureTestUser(userId, employeeId, "database-test-password");
   await ensureTestUser("mentioned-user", "mentioned-user", "mentioned-user-password");
   await ensureTestUser("admin-e2e-user", "admin-test", "admin-test-password");
@@ -143,7 +151,7 @@ async function main() {
         name: "Legacy stage",
         type: "select",
         options: [
-          { id: "stage-z", name: "Alpha" },
+          { id: "stage-z", name: "Alpha", color: "teal" },
         ],
       },
     ],

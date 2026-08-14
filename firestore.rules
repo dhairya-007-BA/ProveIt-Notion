@@ -205,6 +205,24 @@ service cloud.firestore {
         allow update, delete: if canAccessDatabase(databaseId);
       }
     }
+
+    // Shared table views belong to an accessible database. They only contain
+    // presentation state, never row data or private per-user preferences.
+    match /databaseViews/{viewId} {
+      allow read: if canAccessDatabase(resource.data.databaseId);
+      allow create: if
+        canAccessDatabase(request.resource.data.databaseId)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.workspaceId == get(databasePath(request.resource.data.databaseId)).data.workspaceId
+        && request.resource.data.type == "table";
+      allow update: if
+        canAccessDatabase(resource.data.databaseId)
+        && request.resource.data.databaseId == resource.data.databaseId
+        && request.resource.data.workspaceId == resource.data.workspaceId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.type == "table";
+      allow delete: if canAccessDatabase(resource.data.databaseId);
+    }
 // =========================================
 // DOCUMENTS
 // =========================================

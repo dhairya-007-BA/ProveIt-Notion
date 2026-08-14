@@ -206,6 +206,14 @@ describe("database Firestore rules", () => {
     );
   });
 
+  it("allows authorized members to create shared table views but rejects other workspaces", async () => {
+    const member = testEnv.authenticatedContext("company-member").firestore();
+    const other = testEnv.authenticatedContext("other-member").firestore();
+    const view = { name: "Screened", databaseId, workspaceId: "business", type: "table", createdBy: "company-member" };
+    await assertSucceeds(setDoc(doc(member, "databaseViews", "screened"), view));
+    await assertFails(setDoc(doc(other, "databaseViews", "blocked"), { ...view, createdBy: "other-member" }));
+  });
+
   it("rejects unauthorized database row access", async () => {
     const firestore = testEnv
       .authenticatedContext("other-member")
