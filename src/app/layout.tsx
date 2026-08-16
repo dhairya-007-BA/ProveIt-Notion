@@ -4,7 +4,6 @@ import { AuthProvider } from "@/components/auth-provider";
 import { GlobalSearch } from "@/components/global-search";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NotificationBell } from "@/components/notification-bell";
-import { KaneoControlledBusinessSyncTest } from "@/components/kaneo-controlled-business-sync-test";
 import { MobileShell } from "@/components/mobile-shell";
 import "./globals.css";
 
@@ -38,7 +37,7 @@ export default function RootLayout({
     >
       <head><script dangerouslySetInnerHTML={{ __html: themeInitializer }} /></head>
       <body className="flex min-h-screen flex-col bg-[var(--background)] font-sans text-[var(--text)]">
-        <ThemeProvider><AuthProvider><GlobalSearch /><MobileShell /><div className="fixed right-5 top-5 z-40 hidden md:block lg:right-6 lg:top-6"><NotificationBell /></div>{children}<KaneoControlledBusinessSyncTest /></AuthProvider></ThemeProvider>
+        <ThemeProvider><AuthProvider><GlobalSearch /><MobileShell /><div className="fixed right-5 top-5 z-40 hidden md:block lg:right-6 lg:top-6"><NotificationBell /></div>{children}</AuthProvider></ThemeProvider>
       </body>
     </html>
   );

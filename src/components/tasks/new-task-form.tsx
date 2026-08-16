@@ -11,7 +11,7 @@ import { User } from "firebase/auth";
 
 import { createTask } from "@/lib/tasks";
 import {
-  createProveItTaskThenSyncBusinessKaneo,
+  createProveItTaskThenSyncWorkspaceKaneo,
   createTaskSubmissionGuard,
 } from "@/lib/kaneo-business-task-sync";
 import { getUsers } from "@/lib/users";
@@ -261,7 +261,7 @@ export default function NewTaskForm({
        * activity logging to happen
        * together.
        */
-      const result = await createProveItTaskThenSyncBusinessKaneo(
+      const result = await createProveItTaskThenSyncWorkspaceKaneo(
         () => createTask({
           title: cleanTitle,
 

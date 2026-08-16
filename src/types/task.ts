@@ -48,9 +48,13 @@ export interface ProveItTask {
 
   integration?: {
     kaneo?: {
-      taskId: string;
+      taskId?: string;
       projectId: string;
-      syncState?: "synced" | "failed" | "ambiguous" | "partial";
+      syncState?: "creating" | "synced" | "failed" | "ambiguous" | "retry_permitted" | "partial";
+      creationFingerprint?: string;
+      creationAttempt?: number;
+      requestedAt?: Date;
+      reconciledAt?: Date;
       syncedAt?: Date;
       lastSyncAt?: Date;
     };

@@ -7,23 +7,7 @@ import {
   KaneoError,
   type KaneoConfig,
 } from "@/lib/kaneo";
-import { getKaneoProjectIdForWorkspace } from "@/lib/kaneo-routing";
-
-export const DISPOSABLE_KANEO_TEST_TITLE =
-  "[PROVEIT INTEGRATION TEST] Disposable task";
-export const DISPOSABLE_KANEO_TEST_MARKER =
-  "ProveIt integration marker: proveit-kaneo-test-business-v1";
-export const DISPOSABLE_KANEO_TEST_DESCRIPTION =
-  "Created only to verify the ProveIt → Kaneo integration.\n" +
-  "Safe to delete after verification.\n\n---\n" +
-  DISPOSABLE_KANEO_TEST_MARKER;
-
-export const DISPOSABLE_KANEO_TEST_PAYLOAD = {
-  title: DISPOSABLE_KANEO_TEST_TITLE,
-  description: DISPOSABLE_KANEO_TEST_DESCRIPTION,
-  priority: "no-priority",
-  status: "to-do",
-} as const;
+import { getKaneoProjectIdForWorkspace, type KaneoProjectKey } from "@/lib/kaneo-routing";
 
 export type KaneoCreatedTask = {
   id: string;
@@ -33,7 +17,7 @@ export type KaneoCreatedTask = {
   priority: "no-priority" | "low" | "medium" | "high" | "urgent";
 };
 
-export type KaneoBusinessTaskInput = {
+export type KaneoWorkspaceTaskInput = {
   title: string;
   description?: string;
   priority?: "low" | "medium" | "high" | "urgent";
@@ -82,7 +66,7 @@ function createdTaskFromUnknown(value: unknown): KaneoCreatedTask | null {
   };
 }
 
-function normalizeBusinessTaskInput(input: KaneoBusinessTaskInput) {
+function normalizeWorkspaceTaskInput(input: KaneoWorkspaceTaskInput) {
   if (typeof input.title !== "string" || !input.title.trim() ||
     (input.description !== undefined && typeof input.description !== "string") ||
     (input.priority !== undefined && !BUSINESS_PRIORITIES.has(input.priority))) {
@@ -98,7 +82,7 @@ function normalizeBusinessTaskInput(input: KaneoBusinessTaskInput) {
   };
 }
 
-export async function preflightDisposableKaneoTask(
+export async function preflightKaneoTask(
   projectId: string,
   options: {
     config?: KaneoConfig;
@@ -116,51 +100,22 @@ export async function preflightDisposableKaneoTask(
   }
 }
 
-export async function createDisposableKaneoTask(
-  projectId: string,
-  options: {
-    config?: KaneoConfig;
-    dependencies?: Pick<CreateDependencies, "post">;
-  } = {}
-) {
-  const dependencies = { ...defaultDependencies, ...options.dependencies };
-  let response: unknown;
-
-  try {
-    response = await dependencies.post(
-      `/api/task/${encodeURIComponent(projectId)}`,
-      DISPOSABLE_KANEO_TEST_PAYLOAD,
-      { config: options.config }
-    );
-  } catch (error) {
-    if (error instanceof KaneoError) throw error;
-    throw new KaneoTaskCreateError("Kaneo service is unavailable.", 503);
-  }
-
-  const task = createdTaskFromUnknown(response);
-  if (!task || task.projectId !== projectId || task.title !== DISPOSABLE_KANEO_TEST_TITLE ||
-    task.status !== "to-do" || task.priority !== "no-priority") {
-    throw new KaneoTaskCreateError("Kaneo returned an invalid response.", 502);
-  }
-
-  return task;
-}
-
 /**
- * Creates one Business task without Firestore reservation or retry behavior.
+ * Creates one server-authorized Business task without retry behavior.
  * A timeout or network failure is ambiguous: callers must not retry this
  * request automatically because Kaneo may have received the single POST.
  */
-export async function createKaneoBusinessTask(
-  input: KaneoBusinessTaskInput,
+export async function createKaneoWorkspaceTask(
+  workspaceId: KaneoProjectKey,
+  input: KaneoWorkspaceTaskInput,
   options: {
     config?: KaneoConfig;
     dependencies?: Pick<CreateDependencies, "getColumns" | "post">;
   } = {}
 ) {
-  const normalizedInput = normalizeBusinessTaskInput(input);
+  const normalizedInput = normalizeWorkspaceTaskInput(input);
   const config = options.config ?? getKaneoConfig();
-  const projectId = getKaneoProjectIdForWorkspace("business", config.projects);
+  const projectId = getKaneoProjectIdForWorkspace(workspaceId, config.projects);
   const priority = normalizedInput.priority;
   const payload = {
     title: normalizedInput.title,
@@ -169,7 +124,7 @@ export async function createKaneoBusinessTask(
     status: "to-do" as const,
   };
 
-  await preflightDisposableKaneoTask(projectId, {
+  await preflightKaneoTask(projectId, {
     config,
     dependencies: options.dependencies,
   });
@@ -194,4 +149,9 @@ export async function createKaneoBusinessTask(
   }
 
   return task;
+}
+
+/** Preserved locked Business entry point. */
+export function createKaneoBusinessTask(input: KaneoWorkspaceTaskInput, options: Parameters<typeof createKaneoWorkspaceTask>[2] = {}) {
+  return createKaneoWorkspaceTask("business", input, options);
 }

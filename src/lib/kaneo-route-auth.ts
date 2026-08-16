@@ -77,9 +77,13 @@ export async function requireKaneoWorkspaceAccess(
   throw new KaneoRouteAuthError("Workspace access required.", 403);
 }
 
-/** Mirrors the existing Firestore task-delete policy for server routes. */
-export async function requireKaneoBusinessDeleteAccess(request: Request) {
-  const user = await requireKaneoWorkspaceAccess(request, "business");
+/** Mirrors the existing Firestore task-delete policy for mapped-workspace server routes. */
+export async function requireKaneoWorkspaceDeleteAccess(request: Request, workspaceId: "business" | "technology") {
+  const user = await requireKaneoWorkspaceAccess(request, workspaceId);
   if (user.profile.role === "bod" || user.profile.group === "bod") return user;
-  throw new KaneoRouteAuthError("Business task deletion requires BOD access.", 403);
+  throw new KaneoRouteAuthError("Mapped workspace task deletion requires BOD access.", 403);
+}
+
+export function requireKaneoBusinessDeleteAccess(request: Request) {
+  return requireKaneoWorkspaceDeleteAccess(request, "business");
 }
