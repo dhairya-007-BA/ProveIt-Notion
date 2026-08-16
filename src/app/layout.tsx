@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Montserrat } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
 import { GlobalSearch } from "@/components/global-search";
+import { ThemeProvider } from "@/components/theme-provider";
+import { NotificationBell } from "@/components/notification-bell";
+import { KaneoControlledBusinessSyncTest } from "@/components/kaneo-controlled-business-sync-test";
+import { MobileShell } from "@/components/mobile-shell";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const montserrat = Montserrat({
+  variable: "--font-montserrat",
   subsets: ["latin"],
 });
 
@@ -18,6 +22,8 @@ export const metadata: Metadata = {
   title: "ProveIt Workspace",
   description: "The internal workspace for ProveIt Hiring Innovations",
 };
+
+const themeInitializer = `(()=>{try{const theme=localStorage.getItem("proveit-theme")==="dark"?"dark":"light";document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme}catch{}})()`;
 
 export default function RootLayout({
   children,
@@ -27,10 +33,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
+      className={`${inter.variable} ${montserrat.variable} h-full antialiased`}
     >
-      <body className="flex min-h-screen flex-col bg-[#fbfbfa] font-sans text-[#37352f]">
-        <AuthProvider><GlobalSearch />{children}</AuthProvider>
+      <head><script dangerouslySetInnerHTML={{ __html: themeInitializer }} /></head>
+      <body className="flex min-h-screen flex-col bg-[var(--background)] font-sans text-[var(--text)]">
+        <ThemeProvider><AuthProvider><GlobalSearch /><MobileShell /><div className="fixed right-5 top-5 z-40 hidden md:block lg:right-6 lg:top-6"><NotificationBell /></div>{children}<KaneoControlledBusinessSyncTest /></AuthProvider></ThemeProvider>
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
 import WorkspaceManager from "@/components/workspaces/workspace-manager";
+import { BackButton } from "@/components/back-button";
 
 export default function WorkspaceAdminPage() {
   const router = useRouter();
@@ -48,7 +49,7 @@ export default function WorkspaceAdminPage() {
 
   return (
     <main className="min-h-screen bg-gray-50 px-8 py-10">
-      <WorkspaceManager />
+      <div className="mx-auto max-w-5xl"><BackButton href="/" label="Home" /><WorkspaceManager /></div>
     </main>
   );
 }

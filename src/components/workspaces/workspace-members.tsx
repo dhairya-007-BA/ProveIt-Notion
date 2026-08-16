@@ -82,7 +82,12 @@ export default function WorkspaceMembers({
   }
 
   useEffect(() => {
-    loadData();
+    const timer = window.setTimeout(() => {
+      void loadData();
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // loadData uses the current workspace/profile inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, isBOD]);
 
   async function handleAddMember() {

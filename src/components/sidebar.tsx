@@ -1,65 +1,28 @@
 "use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
-
+import { signOut } from "firebase/auth";
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { ProveItLogo } from "@/components/proveit-logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/components/auth-provider";
 import { getAccessibleWorkspaces } from "@/lib/accessible-workspaces";
-import { Workspace } from "@/types/workspace";
-import { db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
+import type { Workspace } from "@/types/workspace";
 
-const modules = [
-  { segment: "dashboard", label: "Dashboard", icon: "◫" },
-  { segment: "documents", label: "Documents", icon: "▤" },
-  { segment: "tasks", label: "Tasks", icon: "✓" },
-  { segment: "meetings", label: "Meetings", icon: "◷" },
-  { segment: "databases", label: "Databases", icon: "▦" },
-  { segment: "activity", label: "Recent activity", icon: "◦" },
-];
+const modules = ["dashboard", "documents", "tasks", "meetings", "databases", "activity"] as const;
+const labels: Record<(typeof modules)[number], string> = { dashboard: "Dashboard", documents: "Documents", tasks: "Tasks", meetings: "Meetings", databases: "Databases", activity: "Recent activity" };
+function initials(name = "") { return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "P"; }
+function Glyph({ children }: { children: React.ReactNode }) { return <span aria-hidden className="grid h-5 w-5 place-items-center text-xs">{children}</span>; }
 
 export default function Sidebar() {
-  const { profile, firebaseUser } = useAuth();
-  const pathname = usePathname();
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [unread, setUnread] = useState(0);
-  const [workspaceExpansion, setWorkspaceExpansion] = useState<Record<string, boolean>>({});
+  const { profile } = useAuth(); const pathname = usePathname(); const router = useRouter(); const ref = useRef<HTMLDivElement>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]); const [tree, setTree] = useState<Record<string, boolean>>({}); const [open, setOpen] = useState(false); const [collapsed, setCollapsed] = useState(() => typeof window !== "undefined" && localStorage.getItem("proveit-sidebar-collapsed") === "true");
   const workspaceId = pathname.match(/^\/workspaces\/([^/]+)/)?.[1];
-
-  useEffect(() => {
-    if (!firebaseUser || !workspaceId) return;
-    return onSnapshot(query(collection(db, "notifications"), where("recipientUid", "==", firebaseUser.uid)), (snapshot) => setUnread(snapshot.docs.filter((item) => item.data().workspaceId === workspaceId && !item.data().readAt && !item.data().archivedAt).length), (error) => console.error("Failed to load inbox badge from notifications:", error));
-  }, [firebaseUser, workspaceId]);
-
-  useEffect(() => {
-    if (!profile) return;
-    let active = true;
-    const currentProfile = profile;
-
-    async function loadWorkspaces() {
-      try {
-        setLoading(true);
-        const accessible = await getAccessibleWorkspaces(currentProfile);
-        if (active) setWorkspaces(accessible);
-      } catch (error) {
-        console.error("Failed to load accessible workspaces:", error);
-        if (active) setWorkspaces([]);
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-
-    void loadWorkspaces();
-    return () => { active = false; };
-  }, [profile]);
-
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
-  const toggleWorkspace = (id: string, expanded: boolean) => {
-    setWorkspaceExpansion((current) => ({ ...current, [id]: !expanded }));
-  };
-
-  return <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--sidebar)] px-3 py-4 text-[var(--foreground)] md:flex"><Link href="/" className="mb-6 flex items-center gap-2.5 rounded-lg px-2 py-2 transition hover:bg-[var(--hover)]"><ProveItLogo className="h-6 w-6" priority /><span className="text-sm font-semibold tracking-[-0.02em]">ProveIt</span></Link><nav className="min-h-0 flex-1 overflow-y-auto"><button type="button" aria-label="Open search" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))} className="mb-2 flex w-full items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-sm text-[var(--muted)] hover:bg-[var(--hover)]"><span aria-hidden>⌕</span><span>Search</span><kbd className="ml-auto text-[11px]">⌘K</kbd></button><Link href={workspaceId ? `/workspaces/${workspaceId}/inbox` : "/"} className={`mb-5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${pathname.includes("/inbox") ? "bg-[var(--selected)] font-medium" : "hover:bg-[var(--hover)]"}`}><span aria-hidden>◉</span><span>Inbox</span>{unread > 0 && <span aria-label={`${unread} unread notifications`} className="ml-auto rounded-full bg-[var(--active)] px-1.5 py-0.5 text-[11px]">{unread}</span>}</Link><p className="proveit-label mb-2 px-2">Workspaces</p>{loading ? <p className="px-2 py-2 text-sm text-[var(--subtle)]">Loading…</p> : <div className="space-y-1">{workspaces.map((workspace) => { const workspaceHref = `/workspaces/${workspace.id}`; const isCurrentWorkspace = workspace.id === workspaceId; const expanded = workspace.id in workspaceExpansion ? workspaceExpansion[workspace.id] : isCurrentWorkspace; return <div key={workspace.id}><div className={`flex items-center rounded-lg text-sm transition ${isCurrentWorkspace && pathname === workspaceHref ? "bg-[var(--selected)] font-medium" : "hover:bg-[var(--hover)]"}`}><button type="button" aria-label={`${expanded ? "Collapse" : "Expand"} ${workspace.name}`} aria-expanded={expanded} onClick={() => toggleWorkspace(workspace.id, expanded)} className="grid h-9 w-7 shrink-0 place-items-center rounded-l-lg text-xs text-[var(--subtle)] hover:text-[var(--foreground)]">{expanded ? "⌄" : "›"}</button><Link href={workspaceHref} className="flex min-w-0 flex-1 items-center gap-2 py-2 pr-2"><span className="grid h-5 w-5 shrink-0 place-items-center text-sm">{workspace.icon || "▦"}</span><span className="truncate">{workspace.name}</span></Link></div>{expanded && <div className="mb-3 ml-3 border-l border-black/[0.08] py-1 pl-2">{modules.map((module) => { const href = `${workspaceHref}/${module.segment}`; return <Link key={module.segment} href={href} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition ${isActive(href) ? "bg-[var(--selected)] font-medium text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}><span aria-hidden className="w-3 text-center text-xs">{module.icon}</span>{module.label}</Link>; })}</div>}</div>; })}</div>}{profile?.group === "bod" && <div className="mt-6 border-t border-black/[0.08] pt-4"><p className="proveit-label mb-1 px-2">Administration</p><Link href="/admin/employees" className={`block rounded-md px-2 py-1.5 text-sm transition ${pathname.startsWith("/admin/employees") ? "bg-[var(--selected)] font-medium" : "hover:bg-[var(--hover)]"}`}>Employees</Link><Link href="/admin/workspaces" className={`block rounded-md px-2 py-1.5 text-sm transition ${pathname.startsWith("/admin/workspaces") ? "bg-[var(--selected)] font-medium" : "hover:bg-[var(--hover)]"}`}>Workspace settings</Link></div>}</nav>{profile && <div className="mt-3 flex items-center gap-2 border-t border-black/[0.08] px-2 pt-4"><div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--active)] text-xs font-semibold text-[var(--muted)]">{profile.name.slice(0, 1).toUpperCase()}</div><div className="min-w-0"><p className="truncate text-xs font-medium">{profile.name}</p><p className="truncate text-[11px] text-[var(--subtle)]">{profile.employeeId}</p></div></div>}</aside>;
+  useEffect(() => { localStorage.setItem("proveit-sidebar-collapsed", String(collapsed)); }, [collapsed]);
+  useEffect(() => { if (profile) void getAccessibleWorkspaces(profile).then(setWorkspaces).catch(() => setWorkspaces([])); }, [profile]);
+  useEffect(() => { const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); }; const outside = (event: MouseEvent) => { if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false); }; window.addEventListener("keydown", escape); window.addEventListener("mousedown", outside); return () => { window.removeEventListener("keydown", escape); window.removeEventListener("mousedown", outside); }; }, []);
+  const nav = (active: boolean) => `flex items-center rounded-lg px-2.5 py-2 text-sm transition ${active ? "proveit-nav-active font-medium" : "text-[var(--muted)] hover:bg-[var(--hover)]"}`;
+  const logout = async () => { await signOut(auth); router.replace("/login"); };
+  return <aside className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-[var(--border)] bg-[var(--sidebar)] py-4 transition-[width] duration-200 md:flex ${collapsed ? "w-[72px] px-2" : "w-64 px-3"}`}><div className="mb-4 flex items-center justify-between"><Link href="/" aria-label="ProveIt home" title={collapsed ? "ProveIt" : undefined} className="rounded-lg p-2 hover:bg-[var(--hover)]"><ProveItLogo className={collapsed ? "h-7 w-7" : "h-auto w-28"} priority /></Link><button type="button" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} title={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setCollapsed((value) => !value)} className="grid h-8 w-8 place-items-center rounded-lg text-[var(--muted)] hover:bg-[var(--hover)]">{collapsed ? "›" : "‹"}</button></div><nav className="min-h-0 flex-1 overflow-y-auto"><button type="button" aria-label="Open search" title={collapsed ? "Search" : undefined} onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))} className={`${nav(false)} mb-2 w-full gap-2 border border-[var(--border)] bg-[var(--surface)]`}><Glyph>⌕</Glyph>{!collapsed && <><span>Search</span><kbd className="ml-auto text-[11px]">⌘K</kbd></>}</button><Link href="/" title={collapsed ? "Home" : undefined} className={`${nav(pathname === "/")} mb-5 gap-2`}><Glyph>⌂</Glyph>{!collapsed && "Home"}</Link>{!collapsed && <p className="proveit-label mb-2 px-2">Workspaces</p>}{workspaces.map((workspace) => { const href = `/workspaces/${workspace.id}`; const expanded = tree[workspace.id] ?? workspace.id === workspaceId; return <div key={workspace.id} className="mb-1"><div className={nav(workspace.id === workspaceId && pathname === href)}>{!collapsed && <button type="button" aria-label={`${expanded ? "Collapse" : "Expand"} ${workspace.name}`} onClick={() => setTree((value) => ({ ...value, [workspace.id]: !expanded }))} className="mr-1">{expanded ? "⌄" : "›"}</button>}<Link href={href} title={collapsed ? workspace.name : undefined} className="flex min-w-0 flex-1 items-center gap-2"><Glyph>{workspace.name.slice(0, 1)}</Glyph>{!collapsed && <span className="truncate">{workspace.name}</span>}</Link></div>{!collapsed && expanded && <div className="ml-4 border-l border-[var(--border)] pl-2">{modules.map((module) => <Link key={module} href={`${href}/${module}`} className={`${nav(pathname.startsWith(`${href}/${module}`))} px-2 py-1.5 text-[13px]`}>{labels[module]}</Link>)}</div>}</div>; })}{profile?.group === "bod" && <div className="mt-6 border-t border-[var(--border)] pt-4">{!collapsed && <p className="proveit-label mb-1 px-2">Administration</p>}<Link href="/admin/employees" title={collapsed ? "Employees" : undefined} className={`${nav(pathname.startsWith("/admin/employees"))} gap-2`}><Glyph>⚙</Glyph>{!collapsed && "Employees"}</Link><Link href="/admin/workspaces" title={collapsed ? "Workspace settings" : undefined} className={`${nav(pathname.startsWith("/admin/workspaces"))} gap-2`}><Glyph>⚙</Glyph>{!collapsed && "Workspace settings"}</Link></div>}</nav><div ref={ref} className="relative mt-3 border-t border-[var(--border)] pt-3"><div className="flex items-center gap-2">{!collapsed && <ThemeToggle />}<button type="button" aria-label="Open account menu" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-2 text-left hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--selected)] text-xs font-semibold text-[var(--secondary)]">{initials(profile?.name)}</span>{!collapsed && <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{profile?.name}</span><span className="block truncate text-[11px] text-[var(--subtle)]">{profile?.employeeId}</span></span>}</button></div>{open && <section role="menu" aria-label="Account menu" className={`absolute bottom-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-2 shadow-[var(--shadow-md)] ${collapsed ? "left-0 w-64" : "left-0 right-0"}`}><div className="px-3 py-2"><p className="truncate text-sm font-medium">{profile?.name}</p><p className="mt-1 text-xs text-[var(--muted)]">Employee ID · {profile?.employeeId}</p></div><Link role="menuitem" href="/profile" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2 text-sm hover:bg-[var(--hover)]">Your profile</Link><div className="flex items-center justify-between rounded-lg px-3 py-2 text-sm"><span>Appearance</span><ThemeToggle /></div><div className="my-1 border-t border-[var(--border)]" /><button role="menuitem" type="button" onClick={() => void logout()} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-[var(--danger)] hover:bg-[var(--status-danger-bg)]">Sign out</button></section>}</div></aside>;
 }

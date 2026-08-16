@@ -3,14 +3,23 @@
 import {
   FormEvent,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
 import { User } from "firebase/auth";
 
 import { createTask } from "@/lib/tasks";
+import {
+  createProveItTaskThenSyncBusinessKaneo,
+  createTaskSubmissionGuard,
+} from "@/lib/kaneo-business-task-sync";
 import { getUsers } from "@/lib/users";
 import { getMembershipsForWorkspace } from "@/lib/memberships";
+import CustomFieldProperties from "@/components/tasks/custom-field-properties";
+import { useAuth } from "@/components/auth-provider";
+import { saveTaskCustomFields } from "@/lib/task-custom-fields";
+import { type CustomFieldValue, type WorkspaceCustomField } from "@/lib/custom-fields";
 
 import { ProveItUser } from "@/types/user";
 import {
@@ -21,16 +30,21 @@ import {
 interface NewTaskFormProps {
   workspaceId: string;
   currentUser: User;
+  initialStatus?: TaskStatus;
   onCreated: () => Promise<void> | void;
   onCancel: () => void;
+  onSyncNotice?: (message: string) => void;
 }
 
 export default function NewTaskForm({
   workspaceId,
   currentUser,
+  initialStatus = "todo",
   onCreated,
   onCancel,
+  onSyncNotice,
 }: NewTaskFormProps) {
+  const { firebaseUser, profile } = useAuth();
   const [title, setTitle] =
     useState("");
 
@@ -38,7 +52,7 @@ export default function NewTaskForm({
     useState("");
 
   const [status, setStatus] =
-    useState<TaskStatus>("todo");
+    useState<TaskStatus>(initialStatus);
 
   const [priority, setPriority] =
     useState<TaskPriority>("medium");
@@ -62,6 +76,25 @@ export default function NewTaskForm({
 
   const [error, setError] =
     useState("");
+
+  const [taskCreated, setTaskCreated] =
+    useState(false);
+
+  const [customFields, setCustomFields] = useState<Record<string, CustomFieldValue>>({});
+  const [customDefinitions, setCustomDefinitions] = useState<WorkspaceCustomField[]>([]);
+  const [workspaceCanManageProperties, setWorkspaceCanManageProperties] = useState(false);
+
+  const submissionGuard = useRef(createTaskSubmissionGuard());
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!firebaseUser) return;
+    void getMembershipsForWorkspace(workspaceId).then((memberships) => {
+      const membership = memberships.find((item) => item.userId === firebaseUser.uid);
+      if (!cancelled) setWorkspaceCanManageProperties(membership?.role === "manager" || membership?.role === "admin");
+    }).catch(() => { if (!cancelled) setWorkspaceCanManageProperties(false); });
+    return () => { cancelled = true; };
+  }, [firebaseUser, workspaceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,6 +218,10 @@ export default function NewTaskForm({
   ) {
     event.preventDefault();
 
+    if (loading || taskCreated) {
+      return;
+    }
+
     setError("");
 
     const cleanTitle =
@@ -195,6 +232,18 @@ export default function NewTaskForm({
         "Task title is required."
       );
 
+      return;
+    }
+
+    if (customDefinitions.some((field) => {
+      const value = customFields[field.id];
+      return field.required && (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0));
+    })) {
+      setError("Complete all required custom properties.");
+      return;
+    }
+
+    if (!submissionGuard.current.tryAcquire()) {
       return;
     }
 
@@ -212,30 +261,44 @@ export default function NewTaskForm({
        * activity logging to happen
        * together.
        */
-      await createTask({
-        title: cleanTitle,
+      const result = await createProveItTaskThenSyncBusinessKaneo(
+        () => createTask({
+          title: cleanTitle,
 
-        description:
-          description.trim(),
+          description:
+            description.trim(),
 
+          workspaceId,
+
+          status,
+
+          priority,
+
+          assigneeId:
+            assigneeId || null,
+
+          dueDate: dueDate
+            ? new Date(
+                `${dueDate}T12:00:00`
+              )
+            : null,
+
+          createdBy:
+            currentUser.uid,
+        }),
+        currentUser,
         workspaceId,
+        {
+          title: cleanTitle,
+          description: description.trim(),
+          priority,
+        }
+      );
 
-        status,
-
-        priority,
-
-        assigneeId:
-          assigneeId || null,
-
-        dueDate: dueDate
-          ? new Date(
-              `${dueDate}T12:00:00`
-            )
-          : null,
-
-        createdBy:
-          currentUser.uid,
-      });
+      if (Object.keys(customFields).length > 0) {
+        const saved = await saveTaskCustomFields(currentUser, result.proveItTaskId, customFields);
+        if (!saved) onSyncNotice?.("Task created, but custom properties could not be saved.");
+      }
 
       /*
        * Reset form after successful
@@ -243,13 +306,29 @@ export default function NewTaskForm({
        */
       setTitle("");
       setDescription("");
-      setStatus("todo");
+      setStatus(initialStatus);
       setPriority("medium");
       setDueDate("");
       setAssigneeId("");
+      setCustomFields({});
+
+      if (result.kaneoSync === "failed") {
+        setTaskCreated(true);
+        onSyncNotice?.("Task created, but external task sync failed.");
+        await onCreated();
+        return;
+      }
+
+      if (result.kaneoSync === "ambiguous") {
+        setTaskCreated(true);
+        onSyncNotice?.("Task created. External task sync could not be confirmed.");
+        await onCreated();
+        return;
+      }
 
       await onCreated();
     } catch (error) {
+      submissionGuard.current.release();
       console.error(
         "Failed to create task:",
         error
@@ -266,10 +345,6 @@ export default function NewTaskForm({
         setError(
           "You don't currently have permission to create tasks in this workspace. Contact a workspace administrator if you believe this is incorrect."
         );
-      } else if (error instanceof Error) {
-        setError(
-          error.message
-        );
       } else {
         setError(
           "Task could not be created."
@@ -281,13 +356,14 @@ export default function NewTaskForm({
   }
 
   return (
-    <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6">
+    <div className="flex min-h-full flex-col bg-[var(--surface)] p-5 sm:p-7">
       <div>
-        <h2 className="text-lg font-semibold">
+        <p className="proveit-label">Create work</p>
+        <h2 className="proveit-heading mt-1 text-xl font-semibold tracking-[-0.03em]">
           New task
         </h2>
 
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
           Add work to this workspace.
         </p>
       </div>
@@ -299,7 +375,7 @@ export default function NewTaskForm({
         {/* TITLE */}
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
+          <label className="mb-2 block text-sm font-medium text-[var(--text)]">
             Task title
           </label>
 
@@ -313,14 +389,14 @@ export default function NewTaskForm({
               )
             }
             placeholder="Prepare investor update"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+            className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none transition hover:border-[var(--border-strong)] focus:border-[var(--secondary)]"
           />
         </div>
 
         {/* DESCRIPTION */}
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
+          <label className="mb-2 block text-sm font-medium text-[var(--text)]">
             Description
           </label>
 
@@ -333,18 +409,18 @@ export default function NewTaskForm({
             }
             rows={4}
             placeholder="Add context, requirements or notes..."
-            className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none transition focus:border-gray-400"
+            className="w-full resize-none rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none transition hover:border-[var(--border-strong)] focus:border-[var(--secondary)]"
           />
         </div>
 
         {/* TASK DETAILS */}
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2">
 
           {/* STATUS */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
               Status
             </label>
 
@@ -356,7 +432,7 @@ export default function NewTaskForm({
                     .value as TaskStatus
                 )
               }
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm"
             >
               <option value="todo">
                 To do
@@ -379,7 +455,7 @@ export default function NewTaskForm({
           {/* PRIORITY */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
               Priority
             </label>
 
@@ -391,7 +467,7 @@ export default function NewTaskForm({
                     .value as TaskPriority
                 )
               }
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm"
             >
               <option value="low">
                 Low
@@ -414,7 +490,7 @@ export default function NewTaskForm({
           {/* ASSIGNEE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
               Assignee
             </label>
 
@@ -428,7 +504,7 @@ export default function NewTaskForm({
                   event.target.value
                 )
               }
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm disabled:opacity-60"
             >
               <option value="">
                 {loadingEmployees
@@ -459,7 +535,7 @@ export default function NewTaskForm({
           {/* DUE DATE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
               Due date
             </label>
 
@@ -471,15 +547,17 @@ export default function NewTaskForm({
                   event.target.value
                 )
               }
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400"
+              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none focus:border-[var(--secondary)]"
             />
           </div>
         </div>
 
+        <CustomFieldProperties workspaceId={workspaceId} values={customFields} onChange={setCustomFields} people={employees} onFieldsLoaded={setCustomDefinitions} canManage={workspaceCanManageProperties || profile?.group === "bod" || profile?.capabilities?.manageWorkspaces === true} />
+
         {/* ASSIGNMENT INFO */}
 
-        <div className="rounded-lg bg-gray-50 px-4 py-3">
-          <p className="text-sm text-gray-600">
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 py-3">
+          <p className="text-sm text-[var(--muted)]">
             {assigneeId
               ? "This task will be assigned to the selected employee."
               : "This task will be created unassigned."}
@@ -489,31 +567,33 @@ export default function NewTaskForm({
         {/* ERROR */}
 
         {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="status" className="proveit-toast px-4 py-3 text-sm">
             {error}
           </div>
         )}
 
         {/* ACTIONS */}
 
-        <div className="flex justify-end gap-3">
+        <div className="mt-auto flex justify-end gap-3 border-t border-[var(--border)] pt-5">
           <button
             type="button"
             disabled={loading}
             onClick={onCancel}
-            className="rounded-lg px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+            className="proveit-secondary-button disabled:opacity-50"
           >
             Cancel
           </button>
 
           <button
             type="submit"
-            disabled={loading}
-            className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={loading || taskCreated}
+            className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
               ? "Creating..."
-              : "Create task"}
+              : taskCreated
+                ? "Task created"
+                : "Create task"}
           </button>
         </div>
       </form>

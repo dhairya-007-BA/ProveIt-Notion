@@ -231,6 +231,10 @@ function convertTask(
     archived:
       data.archived ??
       false,
+
+    customFields: typeof data.customFields === "object" && data.customFields !== null && !Array.isArray(data.customFields)
+      ? data.customFields
+      : undefined,
   };
 }
 

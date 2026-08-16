@@ -202,46 +202,8 @@ export async function POST(
         FieldValue.serverTimestamp(),
     });
 
-    // ─────────────────────────────
-    // WORKSPACE MEMBERSHIP
-    // ─────────────────────────────
-    //
-    // Business and Technology employees
-    // receive explicit membership documents.
-    //
-    // BOD access is role-based and therefore
-    // does not require individual membership
-    // documents for the canonical workspaces.
-
-    if (role !== "bod") {
-      const membershipId =
-        `${department}_${authUser.uid}`;
-
-      const membershipRef = adminDb
-        .collection(
-          "workspaceMemberships"
-        )
-        .doc(membershipId);
-
-      batch.set(membershipRef, {
-        workspaceId: department,
-        userId: authUser.uid,
-        role: "member",
-        active: true,
-
-        createdBy:
-          administrator.uid,
-
-        createdAt:
-          FieldValue.serverTimestamp(),
-
-        updatedAt:
-          FieldValue.serverTimestamp(),
-      });
-    }
-
-    // Commit the Firestore profile and
-    // membership together.
+    // Job role and department are descriptive metadata only. Workspace
+    // memberships and administrative capabilities are granted explicitly.
     await batch.commit();
 
     // Authentication account now has

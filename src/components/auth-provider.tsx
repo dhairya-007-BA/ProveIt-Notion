@@ -112,6 +112,14 @@ export function AuthProvider({
         data.email ||
         undefined,
 
+      phoneNumber:
+        data.phoneNumber ||
+        undefined,
+
+      department:
+        data.department ||
+        undefined,
+
       /*
        * Firestore currently stores this
        * field as "role".
@@ -123,6 +131,9 @@ export function AuthProvider({
 
       active:
         data.active === true,
+
+      capabilities:
+        data.capabilities || undefined,
 
       /*
        * Existing employees that do not

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { User } from "firebase/auth";
 
 import { ProveItUser } from "@/types/user";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface EmployeeActionsProps {
   employee: ProveItUser;
@@ -40,6 +41,7 @@ export default function EmployeeActions({
 
   const [error, setError] =
     useState("");
+  const [confirmingDeactivation, setConfirmingDeactivation] = useState(false);
 
   const isCurrentUser =
     employee.uid === currentUser.uid;
@@ -47,15 +49,6 @@ export default function EmployeeActions({
   async function changeStatus(
     active: boolean
   ) {
-    if (
-      !active &&
-      !window.confirm(
-        `Deactivate ${employee.name}? They will no longer be able to access ProveIt.`
-      )
-    ) {
-      return;
-    }
-
     try {
       setLoading(true);
       setError("");
@@ -93,6 +86,7 @@ export default function EmployeeActions({
       }
 
       setOpen(false);
+      setConfirmingDeactivation(false);
 
       await onChanged();
     } catch (error) {
@@ -101,13 +95,7 @@ export default function EmployeeActions({
         error
       );
 
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError(
-          "Employee status could not be changed."
-        );
-      }
+      setError("Employee status could not be changed.");
     } finally {
       setLoading(false);
     }
@@ -188,9 +176,7 @@ export default function EmployeeActions({
                 loading ||
                 isCurrentUser
               }
-              onClick={() =>
-                changeStatus(false)
-              }
+              onClick={() => setConfirmingDeactivation(true)}
               className="block w-full px-4 py-2.5 text-left text-sm text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-white"
             >
               {isCurrentUser
@@ -235,6 +221,7 @@ export default function EmployeeActions({
           {error}
         </div>
       )}
+      <ConfirmDialog open={confirmingDeactivation} title="Deactivate employee?" description={`${employee.name} will no longer be able to access ProveIt. You can reactivate this employee later.`} confirmLabel="Deactivate employee" loading={loading} error={error} onCancel={() => { if (!loading) { setConfirmingDeactivation(false); setError(""); } }} onConfirm={() => void changeStatus(false)} />
     </div>
   );
 }

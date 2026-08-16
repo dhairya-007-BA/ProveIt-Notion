@@ -9,8 +9,9 @@ import Sidebar from "@/components/sidebar";
 import { useAuth } from "@/components/auth-provider";
 import { db } from "@/lib/firebase";
 
-type Task = { id: string; title: string; status: string; priority: string; dueDate?: Date };
+type Task = { id: string; title: string; status: string; priority: string; assigneeId?: string | null; dueDate?: Date };
 type Meeting = { id: string; title: string; updatedAt?: Date };
+type Document = { id: string; title: string; updatedAt?: Date };
 type Activity = { id: string; description: string; createdAt?: Date };
 type WorkspaceSummary = { name: string; icon: string };
 
@@ -23,6 +24,7 @@ export default function DashboardPage() {
   const [workspace, setWorkspace] = useState<WorkspaceSummary | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [error, setError] = useState("");
 
@@ -47,12 +49,17 @@ export default function DashboardPage() {
     return onSnapshot(query(collection(db, "tasks"), where("workspaceId", "==", workspaceId)), (snapshot) => {
       setTasks(snapshot.docs.map((item) => {
         const data = item.data();
-        return { id: item.id, title: data.title || "Untitled task", status: data.status || "todo", priority: data.priority || "medium", dueDate: data.dueDate?.toDate() };
+        return { id: item.id, title: data.title || "Untitled task", status: data.status || "todo", priority: data.priority || "medium", assigneeId: data.assigneeId ?? null, dueDate: data.dueDate?.toDate() };
       }).filter((_, index) => snapshot.docs[index].data().archived !== true));
     }, (listenerError) => {
       console.error("Failed to load dashboard tasks:", listenerError);
       setError("Tasks could not be loaded for this overview.");
     });
+  }, [firebaseUser, profile, workspaceId]);
+
+  useEffect(() => {
+    if (!firebaseUser || !profile || !workspaceId) return;
+    return onSnapshot(query(collection(db, "documents"), where("workspaceId", "==", workspaceId)), (snapshot) => setDocuments(snapshot.docs.map((item) => ({ id: item.id, title: item.data().title || "Untitled document", updatedAt: item.data().updatedAt?.toDate() })).sort((left, right) => (right.updatedAt?.getTime() || 0) - (left.updatedAt?.getTime() || 0)).slice(0, 5)), () => setError("Documents could not be loaded for this overview."));
   }, [firebaseUser, profile, workspaceId]);
 
   useEffect(() => {
@@ -89,15 +96,17 @@ export default function DashboardPage() {
     return priority[left.priority as keyof typeof priority] - priority[right.priority as keyof typeof priority];
   }).slice(0, 6);
   const recentMeetings = [...meetings].sort((left, right) => (right.updatedAt?.getTime() || 0) - (left.updatedAt?.getTime() || 0)).slice(0, 5);
+  const myTasks = tasks.filter((task) => task.assigneeId === firebaseUser?.uid && task.status !== "done");
+  const overdue = tasks.filter((task) => task.status !== "done" && task.dueDate && task.dueDate < new Date());
 
   if (loading) return <main className="grid min-h-screen place-items-center text-sm text-[var(--muted)]">Loading dashboard…</main>;
   if (!firebaseUser || !profile) return null;
 
-  return <main className="flex min-h-screen bg-[var(--background)]"><Sidebar /><section className="proveit-content"><div className="proveit-content-inner"><Link href={`/workspaces/${workspaceId}`} className="proveit-back-link px-1">← Back to workspace</Link><header className="proveit-page-header"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-xl border border-[var(--border)] bg-white text-2xl shadow-[var(--shadow-sm)]">{workspace?.icon || "📁"}</span><div><p className="proveit-label">{workspace?.name || "Workspace"}</p><h1 className="proveit-page-title">Dashboard</h1></div></div><Link href={`/workspaces/${workspaceId}/tasks`} className="proveit-primary-button">View tasks</Link></header><p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted)]">A live overview of the work, priorities, and meetings in this workspace.</p>{error && <p role="alert" className="mt-4 text-sm text-[var(--danger)]">{error}</p>}<section className="mt-8 grid gap-px overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--border)] shadow-[var(--shadow-sm)] sm:grid-cols-2 xl:grid-cols-4"><Metric label="All tasks" value={counts.total} href={`/workspaces/${workspaceId}/tasks`} /><Metric label="In progress" value={counts.active} href={`/workspaces/${workspaceId}/tasks`} /><Metric label="Completed" value={counts.completed} href={`/workspaces/${workspaceId}/tasks`} /><Metric label="High priority" value={counts.highPriority} href={`/workspaces/${workspaceId}/tasks`} /></section><div className="mt-8 grid gap-8 lg:grid-cols-2"><DashboardList title="Open tasks" href={`/workspaces/${workspaceId}/tasks`} action="View all" empty="No open tasks in this workspace.">{openTasks.map((task) => <Link key={task.id} href={`/workspaces/${workspaceId}/tasks?task=${task.id}`} className="group flex items-center justify-between gap-4 rounded-lg px-3 py-3 transition hover:bg-[var(--hover)]"><div className="min-w-0"><p className="truncate text-sm font-medium">{task.title}</p><p className="mt-1 text-xs capitalize text-[var(--muted)]">{statusLabel(task.status)} · {task.priority} priority</p></div>{task.dueDate && <time className="shrink-0 text-xs text-[var(--muted)]">{task.dueDate.toLocaleDateString()}</time>}</Link>)}</DashboardList><DashboardList title="Recent meetings" href={`/workspaces/${workspaceId}/meetings`} action="View all" empty="No meetings yet.">{recentMeetings.map((meeting) => <Link key={meeting.id} href={`/workspaces/${workspaceId}/meetings/${meeting.id}`} className="group block rounded-lg px-3 py-3 transition hover:bg-[var(--hover)]"><p className="truncate text-sm font-medium">{meeting.title}</p><p className="mt-1 text-xs text-[var(--muted)]">{meeting.updatedAt?.toLocaleString() || "New meeting"}</p></Link>)}</DashboardList></div><DashboardList title="Recent activity" href={`/workspaces/${workspaceId}/activity`} action="Open activity" empty="No recorded activity yet." className="mt-8">{activity.slice(0, 5).map((event) => <div key={event.id} className="flex items-start gap-3 rounded-lg px-3 py-3"><span className="mt-1 text-[var(--subtle)]">◦</span><div className="min-w-0"><p className="text-sm">{event.description}</p><p className="mt-1 text-xs text-[var(--muted)]">{event.createdAt?.toLocaleString() || "Just now"}</p></div></div>)}</DashboardList></div></section></main>;
+  return <main className="flex min-h-screen bg-[var(--background)]"><Sidebar /><section className="proveit-content"><div className="proveit-content-inner"><Link href={`/workspaces/${workspaceId}`} className="proveit-back-link px-1">← Back to workspace</Link><header className="proveit-page-header"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-xl border border-[var(--border)] bg-[var(--surface)] text-2xl shadow-[var(--shadow-sm)]">{workspace?.icon || "Workspace"}</span><div><p className="proveit-label">{workspace?.name || "Workspace"}</p><h1 className="proveit-page-title">Dashboard</h1></div></div><Link href={`/workspaces/${workspaceId}/tasks`} className="proveit-primary-button">View tasks</Link></header><p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted)]">A live overview of the work, priorities, and meetings in this workspace.</p>{error && <p role="alert" className="mt-4 text-sm text-[var(--danger)]">{error}</p>}<section className="mt-8 grid gap-px overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--border)] shadow-[var(--shadow-sm)] sm:grid-cols-2 xl:grid-cols-4"><Metric label="Open tasks" value={counts.total - counts.completed} href={`/workspaces/${workspaceId}/tasks`} /><Metric label="My tasks" value={myTasks.length} href={`/workspaces/${workspaceId}/tasks`} /><Metric label="Overdue" value={overdue.length} href={`/workspaces/${workspaceId}/tasks`} /><Metric label="In progress" value={counts.active} href={`/workspaces/${workspaceId}/tasks`} /></section><div className="mt-8 grid gap-8 lg:grid-cols-2"><DashboardList title="Open tasks" href={`/workspaces/${workspaceId}/tasks`} action="View all" empty="No open tasks in this workspace.">{openTasks.map((task) => <Link key={task.id} href={`/workspaces/${workspaceId}/tasks?task=${task.id}`} className="group flex items-center justify-between gap-4 rounded-lg px-3 py-3 transition hover:bg-[var(--hover)]"><div className="min-w-0"><p className="truncate text-sm font-medium">{task.title}</p><p className="mt-1 text-xs capitalize text-[var(--muted)]">{statusLabel(task.status)} · {task.priority} priority</p></div>{task.dueDate && <time className="shrink-0 text-xs text-[var(--muted)]">{task.dueDate.toLocaleDateString()}</time>}</Link>)}</DashboardList><DashboardList title="Upcoming meetings" href={`/workspaces/${workspaceId}/meetings`} action="View all" empty="No meetings yet.">{recentMeetings.map((meeting) => <Link key={meeting.id} href={`/workspaces/${workspaceId}/meetings/${meeting.id}`} className="group block rounded-lg px-3 py-3 transition hover:bg-[var(--hover)]"><p className="truncate text-sm font-medium">{meeting.title}</p><p className="mt-1 text-xs text-[var(--muted)]">{meeting.updatedAt?.toLocaleString() || "New meeting"}</p></Link>)}</DashboardList><DashboardList title="Recent documents" href={`/workspaces/${workspaceId}/documents`} action="View all" empty="No documents yet.">{documents.map((document) => <Link key={document.id} href={`/workspaces/${workspaceId}/documents/${document.id}`} className="group block rounded-lg px-3 py-3 transition hover:bg-[var(--hover)]"><p className="truncate text-sm font-medium">{document.title}</p><p className="mt-1 text-xs text-[var(--muted)]">{document.updatedAt?.toLocaleString() || "New document"}</p></Link>)}</DashboardList><DashboardList title="Recent activity" href={`/workspaces/${workspaceId}/activity`} action="Open activity" empty="No recorded activity yet.">{activity.slice(0, 5).map((event) => <div key={event.id} className="flex items-start gap-3 rounded-lg px-3 py-3"><span className="mt-1 text-[var(--subtle)]">◦</span><div className="min-w-0"><p className="text-sm">{event.description}</p><p className="mt-1 text-xs text-[var(--muted)]">{event.createdAt?.toLocaleString() || "Just now"}</p></div></div>)}</DashboardList></div></div></section></main>;
 }
 
 function Metric({ label, value, href }: { label: string; value: number; href: string }) {
-  return <Link href={href} className="bg-white px-5 py-5 transition hover:bg-[#fafafa]"><p className="proveit-label">{label}</p><p className="mt-2 text-3xl font-semibold tracking-[-0.045em]">{value}</p></Link>;
+  return <Link href={href} className="bg-[var(--surface)] px-5 py-5 transition hover:bg-[var(--hover)]"><p className="proveit-label">{label}</p><p className="mt-2 text-3xl font-semibold tracking-[-0.045em]">{value}</p></Link>;
 }
 
 function DashboardList({ title, href, action, empty, className = "", children }: { title: string; href: string; action: string; empty: string; className?: string; children: React.ReactNode }) {

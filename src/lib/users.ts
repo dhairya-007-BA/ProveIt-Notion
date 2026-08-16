@@ -19,6 +19,8 @@ export async function getUsers(): Promise<ProveItUser[]> {
       uid: userDoc.id,
       employeeId: data.employeeId,
       name: data.name,
+      phoneNumber: data.phoneNumber || undefined,
+      department: data.department || undefined,
       group: data.role,
       active: data.active,
     } as ProveItUser;

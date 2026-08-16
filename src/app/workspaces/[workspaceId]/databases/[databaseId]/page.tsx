@@ -14,13 +14,13 @@ import {
   query,
   serverTimestamp,
   updateDoc,
-  where,
 } from "firebase/firestore";
 
 import Sidebar from "@/components/sidebar";
 import { useAuth } from "@/components/auth-provider";
 import { db } from "@/lib/firebase";
 import { Comments } from "@/components/comments";
+import { authenticatedRequest } from "@/lib/authenticated-request";
 
 type PropertyType =
   | "title"
@@ -344,6 +344,10 @@ export default function DatabasePage() {
   const [activeViewId, setActiveViewId] = useState("default");
   const [visiblePropertyIds, setVisiblePropertyIds] = useState<string[]>([]);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [viewDialog, setViewDialog] = useState<"create" | "rename" | "delete" | null>(null);
+  const [viewName, setViewName] = useState("");
+  const [savingView, setSavingView] = useState(false);
+  const [pendingDeletion, setPendingDeletion] = useState<{ kind: "row"; id: string } | { kind: "property" } | null>(null);
 
   const [editingOptionId, setEditingOptionId] =
     useState<string | null>(null);
@@ -541,15 +545,23 @@ export default function DatabasePage() {
 
   useEffect(() => {
     if (!firebaseUser || !databaseId) return;
-    return onSnapshot(
-      query(
-        collection(db, "databaseViews"),
-        where("databaseId", "==", databaseId),
-        where("workspaceId", "==", workspaceId)
-      ),
-      (snapshot) => setViews(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as DatabaseView))),
-      () => setError("Saved views could not be loaded.")
-    );
+    const user = firebaseUser;
+    let cancelled = false;
+    async function loadViews() {
+      try {
+        const response = await authenticatedRequest(user, `/api/workspaces/${workspaceId}/databases/${databaseId}/views`);
+        const body = await response.json().catch(() => null) as { views?: DatabaseView[]; message?: string; code?: string } | null;
+        if (!response.ok || !body || !Array.isArray(body.views)) {
+          console.info("Saved views request failed", { status: response.status, code: typeof body?.code === "string" ? body.code : "database_views_invalid_response" });
+          throw new Error("saved-view-load");
+        }
+        if (!cancelled) setViews(body.views);
+      } catch {
+        if (!cancelled) setError("Saved views could not be loaded.");
+      }
+    }
+    void loadViews();
+    return () => { cancelled = true; };
   }, [firebaseUser, databaseId, workspaceId]);
 
   function applyView(view: DatabaseView | null) {
@@ -570,45 +582,72 @@ export default function DatabasePage() {
     applyView(viewId === "default" ? null : views.find((view) => view.id === viewId) || null);
   }
 
-  async function createView() {
-    if (!database || !firebaseUser) return;
-    const name = window.prompt("Name this view", "Untitled view")?.trim();
-    if (!name) return;
-    const created = await addDoc(collection(db, "databaseViews"), {
-      name, databaseId, workspaceId: database.workspaceId, type: "table", filters,
-      sort: activeSort, visiblePropertyIds: visibleProperties.map((property) => property.id),
-      propertyOrder: visibleProperties.map((property) => property.id), createdBy: firebaseUser.uid,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-    });
-    setActiveViewId(created.id);
+  function currentViewState() {
+    return { filters, sort: activeSort, visiblePropertyIds: visibleProperties.map((property) => property.id), propertyOrder: visibleProperties.map((property) => property.id) };
+  }
+
+  async function requestView(path: string, init: RequestInit) {
+    if (!firebaseUser) return null;
+    const response = await authenticatedRequest(firebaseUser, path, { ...init, headers: { "Content-Type": "application/json", ...init.headers } });
+    const body = await response.json().catch(() => null) as { view?: DatabaseView; message?: string } | null;
+    if (!response.ok) throw new Error("saved-view-request");
+    return body;
+  }
+
+  function openCreateViewDialog() { setViewName("Untitled view"); setViewDialog("create"); }
+  function openRenameViewDialog() {
+    const view = views.find((candidate) => candidate.id === activeViewId);
+    if (!view) return;
+    setViewName(view.name);
+    setViewDialog("rename");
+  }
+
+  async function submitViewDialog() {
+    const name = viewName.trim();
+    if (!name || savingView) return;
+    try {
+      setSavingView(true);
+      setError("");
+      if (viewDialog === "create") {
+        const body = await requestView(`/api/workspaces/${workspaceId}/databases/${databaseId}/views`, { method: "POST", body: JSON.stringify({ name, state: currentViewState() }) });
+        if (!body?.view) throw new Error("saved-view-create");
+        setViews((current) => [...current, body.view!].sort((left, right) => left.name.localeCompare(right.name)));
+        setActiveViewId(body.view.id);
+      } else if (viewDialog === "rename" && activeViewId !== "default") {
+        await requestView(`/api/workspaces/${workspaceId}/databases/${databaseId}/views/${activeViewId}`, { method: "PATCH", body: JSON.stringify({ name }) });
+        setViews((current) => current.map((view) => view.id === activeViewId ? { ...view, name } : view));
+      }
+      setViewDialog(null);
+    } catch { setError("Saved view could not be saved."); }
+    finally { setSavingView(false); }
   }
 
   async function saveActiveView() {
     if (activeViewId === "default" || !database) return;
-    await updateDoc(doc(db, "databaseViews", activeViewId), {
-      filters, sort: activeSort, visiblePropertyIds: visibleProperties.map((property) => property.id),
-      propertyOrder: visibleProperties.map((property) => property.id), updatedAt: serverTimestamp(),
-    });
-  }
-
-  async function renameActiveView() {
-    const view = views.find((candidate) => candidate.id === activeViewId);
-    const name = view && window.prompt("Rename view", view.name)?.trim();
-    if (view && name) await updateDoc(doc(db, "databaseViews", view.id), { name, updatedAt: serverTimestamp() });
+    try { await requestView(`/api/workspaces/${workspaceId}/databases/${databaseId}/views/${activeViewId}`, { method: "PATCH", body: JSON.stringify({ state: currentViewState() }) }); }
+    catch { setError("Saved view could not be saved."); }
   }
 
   async function duplicateActiveView() {
-    if (activeViewId === "default") { await createView(); return; }
+    if (activeViewId === "default") { openCreateViewDialog(); return; }
     const view = views.find((candidate) => candidate.id === activeViewId);
-    if (!view || !firebaseUser) return;
-    const created = await addDoc(collection(db, "databaseViews"), { ...view, name: `${view.name} copy`, createdBy: firebaseUser.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    setActiveViewId(created.id);
+    if (!view) return;
+    try {
+      const body = await requestView(`/api/workspaces/${workspaceId}/databases/${databaseId}/views`, { method: "POST", body: JSON.stringify({ name: `${view.name} copy`, state: currentViewState() }) });
+      if (!body?.view) throw new Error("saved-view-duplicate");
+      setViews((current) => [...current, body.view!].sort((left, right) => left.name.localeCompare(right.name)));
+      setActiveViewId(body.view.id);
+    } catch { setError("Saved view could not be duplicated."); }
   }
 
   async function deleteActiveView() {
     if (activeViewId === "default") return;
-    await deleteDoc(doc(db, "databaseViews", activeViewId));
-    switchView("default");
+    try {
+      await requestView(`/api/workspaces/${workspaceId}/databases/${databaseId}/views/${activeViewId}`, { method: "DELETE" });
+      setViews((current) => current.filter((view) => view.id !== activeViewId));
+      switchView("default");
+      setViewDialog(null);
+    } catch { setError("Saved view could not be deleted."); }
   }
 
   /*
@@ -835,18 +874,7 @@ export default function DatabasePage() {
    * Delete row
    */
 
-  async function removeRow(
-    rowId: string
-  ) {
-    const confirmed =
-      window.confirm(
-        "Delete this row?"
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
+  async function removeRow(rowId: string) {
     try {
       await deleteDoc(
         doc(
@@ -1209,15 +1237,6 @@ export default function DatabasePage() {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `Delete "${editingProperty.name}"?`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
     try {
       setSavingProperty(true);
       setError("");
@@ -1450,8 +1469,8 @@ export default function DatabasePage() {
     loading
   ) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-500">
+      <main className="flex min-h-screen items-center justify-center bg-[var(--background)]">
+        <p className="text-sm text-[var(--muted)]">
           Loading database...
         </p>
       </main>
@@ -1471,7 +1490,7 @@ export default function DatabasePage() {
 
   if (!database) {
     return (
-      <main className="flex min-h-screen bg-gray-50">
+      <main className="flex min-h-screen bg-[var(--background)]">
         <Sidebar />
 
         <section className="flex-1 p-10">
@@ -1479,12 +1498,12 @@ export default function DatabasePage() {
 
             <Link
               href={`/workspaces/${workspaceId}/databases`}
-              className="text-sm text-gray-500"
+              className="text-sm text-[var(--secondary)]"
             >
               ← Back to databases
             </Link>
 
-            <div className="mt-10 rounded-xl border border-gray-200 bg-white p-8">
+            <div className="mt-10 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8">
 
               <p className="text-red-600">
                 {error ||
@@ -1506,17 +1525,19 @@ export default function DatabasePage() {
    */
 
   return (
-    <main className="flex min-h-screen bg-[#fbfbfa]">
+    <main className="flex min-h-screen bg-[var(--background)]">
+
+      <style>{`[role="dialog"][aria-label="Filter rows"], [role="dialog"][aria-label="Sort rows"] { background-color: var(--surface-elevated) !important; } [role="dialog"][aria-label="Filter rows"] [data-testid="filter-row"] { background-color: var(--surface-muted) !important; }`}</style>
 
       <Sidebar />
 
       <section className="min-w-0 flex-1 overflow-hidden">
 
-        <div className="border-b border-black/[0.09] bg-white/80 px-6 py-3 backdrop-blur md:px-10">
+        <div className="border-b border-[var(--border)] bg-[var(--surface)] px-6 py-3 backdrop-blur md:px-10">
 
           <Link
             href={`/workspaces/${workspaceId}/databases`}
-            className="text-sm text-gray-500 hover:text-gray-900"
+            className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]"
           >
             ← Databases
           </Link>
@@ -1537,7 +1558,7 @@ export default function DatabasePage() {
 
             <div className="mb-7">
 
-              <div className="mb-3 text-4xl">
+              <div className="mb-3 text-4xl text-[var(--secondary)]">
                 ▦
               </div>
 
@@ -1548,7 +1569,7 @@ export default function DatabasePage() {
                     event.target.value
                   )
                 }
-                className="w-full border-none bg-transparent text-4xl font-bold tracking-[-0.03em] text-[#37352f] outline-none placeholder:text-[#b4b3af]"
+                className="proveit-heading w-full border-none bg-transparent text-4xl font-bold tracking-[-0.03em] text-[var(--foreground)] outline-none placeholder:text-[var(--subtle)]"
                 placeholder="Untitled database"
               />
 
@@ -1561,7 +1582,7 @@ export default function DatabasePage() {
                     event.target.value
                   )
                 }
-                className="mt-2 w-full border-none bg-transparent text-sm text-[#787774] outline-none placeholder:text-[#9b9a97]"
+                className="mt-2 w-full border-none bg-transparent text-sm text-[var(--muted)] outline-none placeholder:text-[var(--subtle)]"
                 placeholder="Add a description..."
               />
 
@@ -1569,19 +1590,19 @@ export default function DatabasePage() {
 
             {/* TOOLBAR */}
 
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-black/[0.09]">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)]">
 
               <div className="flex min-w-0 items-center gap-2">
-                <span className="border-b-2 border-[#37352f] px-3 py-2 text-sm font-medium text-[#37352f]">▦ Table</span>
-                <select aria-label="Saved view" value={activeViewId} onChange={(event) => switchView(event.target.value)} className="max-w-44 truncate rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm">
+                <span className="border-b-2 border-[var(--secondary)] px-3 py-2 text-sm font-medium text-[var(--foreground)]">▦ Table</span>
+                <select aria-label="Saved view" value={activeViewId} onChange={(event) => switchView(event.target.value)} className="max-w-44 truncate rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm">
                   <option value="default">All records</option>
                   {views.map((view) => <option key={view.id} value={view.id}>{view.name}</option>)}
                 </select>
-                <button type="button" onClick={() => void createView()} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">+ View</button>
+                <button type="button" onClick={openCreateViewDialog} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">+ View</button>
               </div>
 
               <div className="relative flex flex-wrap items-center gap-2 pb-1">
-                <div className="flex h-8 items-center rounded-md border border-black/[0.1] bg-white px-2 shadow-sm focus-within:border-[var(--focus)] focus-within:ring-2 focus-within:ring-[var(--focus)]/20">
+                <div className="flex h-8 items-center rounded-md border border-[var(--border)] bg-[var(--input)] px-2 shadow-sm focus-within:border-[var(--focus)] focus-within:ring-2 focus-within:ring-[var(--focus)]/20">
                   <span aria-hidden className="mr-1 text-xs text-[var(--subtle)]">⌕</span>
                   <input
                     aria-label="Search rows"
@@ -1592,18 +1613,18 @@ export default function DatabasePage() {
                   />
                   {searchQuery && <button type="button" aria-label="Clear search" onClick={() => setSearchQuery("")} className="ml-1 rounded px-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button>}
                 </div>
-                {activeViewId !== "default" && <><button type="button" onClick={() => void saveActiveView()} className="rounded-md border border-[var(--border)] bg-white px-2.5 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--hover)]">Save view</button><button type="button" onClick={() => void renameActiveView()} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">Rename</button><button type="button" onClick={() => void duplicateActiveView()} className="text-sm text-[var(--muted)] hover:text-[var(--foreground)]">Duplicate</button><button type="button" onClick={() => void deleteActiveView()} className="text-sm text-[var(--danger)]">Delete</button></>}
-                <button type="button" aria-expanded={propertiesOpen} onClick={() => { setPropertiesOpen((current) => !current); setFilterOpen(false); setSortOpen(false); }} className="rounded-md border border-black/[0.1] bg-white px-2.5 py-1.5 text-sm text-[var(--muted)] hover:bg-[var(--hover)]">Properties</button>
-                <button type="button" aria-expanded={filterOpen} aria-haspopup="dialog" onClick={() => { setFilterOpen((current) => !current); setSortOpen(false); setPropertiesOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${filters.length ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-black/[0.1] bg-white text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>≡ Filter{filters.length ? ` · ${filters.length}` : ""}</button>
-                <button type="button" aria-expanded={sortOpen} aria-haspopup="dialog" onClick={() => { setSortOpen((current) => !current); setFilterOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${activeSort ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-black/[0.1] bg-white text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>↕ Sort</button>
-                {propertiesOpen && <div role="dialog" aria-label="Properties" className="absolute right-0 top-10 z-20 w-64 rounded-lg border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Properties</p><button type="button" aria-label="Close properties menu" onClick={() => setPropertiesOpen(false)}>×</button></div><p className="mt-1 text-xs text-[var(--muted)]">Hidden properties remain filterable and editable from row details; table search uses visible text properties.</p><div className="mt-3 space-y-2">{database.properties.map((property) => <label key={property.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleProperties.some((candidate) => candidate.id === property.id)} onChange={(event) => setVisiblePropertyIds((current) => { const ids = current.length ? current : database.properties.map((candidate) => candidate.id); return event.target.checked ? [...ids, property.id] : ids.filter((id) => id !== property.id); })} />{property.name}</label>)}</div></div>}
+                {activeViewId !== "default" && <><button type="button" onClick={() => void saveActiveView()} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Save view</button><button type="button" onClick={openRenameViewDialog} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Rename</button><button type="button" onClick={() => void duplicateActiveView()} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Duplicate</button><button type="button" onClick={() => setViewDialog("delete")} className="min-h-8 rounded-md px-2.5 py-1 text-xs text-[var(--danger)] hover:bg-[var(--hover)]">Delete</button></>}
+                <button type="button" aria-expanded={propertiesOpen} onClick={() => { setPropertiesOpen((current) => !current); setFilterOpen(false); setSortOpen(false); }} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Properties</button>
+                <button type="button" aria-expanded={filterOpen} aria-haspopup="dialog" onClick={() => { setFilterOpen((current) => !current); setSortOpen(false); setPropertiesOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${filters.length ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>≡ Filter{filters.length ? ` · ${filters.length}` : ""}</button>
+                <button type="button" aria-expanded={sortOpen} aria-haspopup="dialog" onClick={() => { setSortOpen((current) => !current); setFilterOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${activeSort ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>↕ Sort</button>
+                {propertiesOpen && <div role="dialog" aria-label="Properties" className="absolute right-0 top-10 z-20 w-64 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Properties</p><button type="button" aria-label="Close properties menu" onClick={() => setPropertiesOpen(false)}>×</button></div><p className="mt-1 text-xs text-[var(--muted)]">Hidden properties remain filterable and editable from row details; table search uses visible text properties.</p><div className="mt-3 space-y-2">{database.properties.map((property) => <label key={property.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleProperties.some((candidate) => candidate.id === property.id)} onChange={(event) => setVisiblePropertyIds((current) => { const ids = current.length ? current : database.properties.map((candidate) => candidate.id); return event.target.checked ? [...ids, property.id] : ids.filter((id) => id !== property.id); })} />{property.name}</label>)}</div></div>}
                 {filterOpen && <div role="dialog" aria-label="Filter rows" className="absolute right-0 top-10 z-20 w-[min(28rem,calc(100vw-2rem))] rounded-lg border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Filter rows</p><button type="button" aria-label="Close filter menu" onClick={() => setFilterOpen(false)} className="rounded px-1 text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button></div><div className="mt-3 space-y-3">{filters.map((filter) => { const property = database.properties.find((candidate) => candidate.id === filter.propertyId) || database.properties[0]; const operators = filterOperators(property.type); const configuredOptionIds = new Set((property.options || []).map((option) => option.id)); const legacyValues = Array.from(new Set(rows.map((row) => row.values[property.id]).filter((value): value is string => typeof value === "string" && value !== "" && !configuredOptionIds.has(value)))); return <div key={filter.id} data-testid="filter-row" className="rounded-lg border border-[var(--border)] bg-[#fafaf9] p-2"><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"><select aria-label="Filter property" value={filter.propertyId} onChange={(event) => { const nextProperty = database.properties.find((candidate) => candidate.id === event.target.value); if (nextProperty) updateFilter(filter.id, { propertyId: nextProperty.id, operator: filterOperators(nextProperty.type)[0].value, value: undefined }); }} className="proveit-control min-w-0 px-2 py-2 text-sm">{database.properties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select><select aria-label="Filter operator" value={filter.operator} onChange={(event) => updateFilter(filter.id, { operator: event.target.value as FilterOperator, value: operatorNeedsValue(event.target.value as FilterOperator) ? filter.value : undefined })} className="proveit-control min-w-0 px-2 py-2 text-sm">{operators.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select>{operatorNeedsValue(filter.operator) && (property.type === "select" ? <select aria-label="Filter value" value={filter.value || ""} onChange={(event) => updateFilter(filter.id, { value: event.target.value })} className="proveit-control min-w-0 px-2 py-2 text-sm"><option value="">Choose…</option>{(property.options || []).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}{legacyValues.map((value) => <option key={value} value={value}>{`Legacy: ${value}`}</option>)}</select> : <input aria-label="Filter value" type={property.type === "number" ? "number" : property.type === "date" ? "date" : "text"} value={filter.value || ""} onChange={(event) => updateFilter(filter.id, { value: event.target.value })} placeholder="Value" className="proveit-control min-w-0 px-2 py-2 text-sm" />)}{!operatorNeedsValue(filter.operator) && <span className="hidden sm:block" />}<button type="button" aria-label="Remove filter" onClick={() => setFilters((current) => current.filter((candidate) => candidate.id !== filter.id))} className="rounded-md px-2 text-sm text-[var(--subtle)] hover:bg-red-50 hover:text-[var(--danger)]">×</button></div></div>; })}</div><div className="mt-4 flex items-center justify-between gap-2"><button type="button" onClick={addFilter} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">+ Add filter</button><div className="flex gap-2"><button type="button" onClick={() => setFilters([])} disabled={!filters.length} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">Clear all</button><button type="button" onClick={() => setFilterOpen(false)} className="proveit-primary-button min-h-8 px-2.5 py-1 text-xs">Done</button></div></div></div>}
                 {sortOpen && <div role="dialog" aria-label="Sort rows" className="absolute right-0 top-10 z-20 w-72 rounded-lg border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Sort rows</p><button type="button" aria-label="Close sort menu" onClick={() => setSortOpen(false)} className="rounded px-1 text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button></div><label className="mt-3 block text-xs font-medium text-[var(--muted)]">Property<select aria-label="Sort property" value={activeSort?.propertyId || ""} onChange={(event) => { const propertyId = event.target.value; setActiveSort(propertyId ? { propertyId, direction: activeSort?.direction || "asc" } : null); }} className="proveit-control mt-1.5 w-full px-2.5 py-2 text-sm"><option value="">Choose a property</option>{database.properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label>{activeSort && (() => { const property = database.properties.find((candidate) => candidate.id === activeSort.propertyId); return property ? <label className="mt-3 block text-xs font-medium text-[var(--muted)]">Direction<select aria-label="Sort direction" value={activeSort.direction} onChange={(event) => setActiveSort({ ...activeSort, direction: event.target.value as SortDirection })} className="proveit-control mt-1.5 w-full px-2.5 py-2 text-sm"><option value="asc">{directionLabel(property.type, "asc")}</option><option value="desc">{directionLabel(property.type, "desc")}</option></select></label> : null; })()}<div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setActiveSort(null)} disabled={!activeSort} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">Clear sort</button><button type="button" onClick={() => setSortOpen(false)} className="proveit-primary-button min-h-8 px-2.5 py-1 text-xs">Done</button></div></div>}
                 <button
                   type="button"
                   onClick={createRow}
                   disabled={creatingRow}
-                  className="rounded-md bg-[#252525] px-3 py-1.5 text-sm font-medium text-white transition hover:bg-black disabled:opacity-50"
+                  className="proveit-primary-button min-h-8 px-3 py-1.5 text-sm disabled:opacity-50"
                 >
                   {creatingRow
                     ? "Adding..."
@@ -1616,20 +1637,20 @@ export default function DatabasePage() {
 
             {/* TABLE */}
 
-            <div className="overflow-x-auto rounded-md border border-black/[0.12] bg-white">
+            <div className="overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--surface)]">
 
               <table className="min-w-full border-collapse">
 
                 <thead>
 
-                  <tr className="bg-[#fbfbfa]">
+                  <tr className="bg-[var(--surface-muted)]">
 
                     {visibleProperties.map(
                       (property) => (
 
                         <th
                           key={property.id}
-                          className="min-w-[190px] border-b border-r border-black/[0.09] px-2 py-1.5 text-left text-xs font-medium text-[#787774]"
+                          className="min-w-[190px] border-b border-r border-[var(--border)] px-2 py-1.5 text-left text-xs font-medium text-[var(--muted)]"
                         >
 
                           <button
@@ -1639,11 +1660,11 @@ export default function DatabasePage() {
                                 property
                               )
                             }
-                            className="flex w-full items-center gap-2 rounded px-1 py-1 text-left transition hover:bg-black/[0.05]"
+                            className="flex w-full items-center gap-2 rounded px-1 py-1 text-left transition hover:bg-[var(--hover)]"
                             title={`Edit ${property.name}`}
                           >
 
-                            <span className="text-gray-400">
+                            <span className="text-[var(--subtle)]">
 
                               {property.type === "title"
                                 ? "Aa"
@@ -1669,7 +1690,7 @@ export default function DatabasePage() {
                               {property.name}
                             </span>
 
-                            <span className="ml-auto text-gray-300">
+                            <span className="ml-auto text-[var(--subtle)]">
                               ▾
                             </span>
 
@@ -1680,7 +1701,7 @@ export default function DatabasePage() {
                       )
                     )}
 
-                    <th className="w-12 border-b border-black/[0.09]">
+                    <th className="w-12 border-b border-[var(--border)]">
 
                       <button
                         type="button"
@@ -1689,7 +1710,7 @@ export default function DatabasePage() {
                             true
                           )
                         }
-                        className="flex h-full w-full items-center justify-center px-4 py-2 text-[#9b9a97] hover:bg-black/[0.05] hover:text-[#37352f]"
+                        className="flex h-full w-full items-center justify-center px-4 py-2 text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"
                         title="Add property"
                       >
                         +
@@ -1708,7 +1729,7 @@ export default function DatabasePage() {
 
                       <tr
                         key={row.id}
-                        className="group transition hover:bg-[#f7f7f5]"
+                        className="group transition hover:bg-[var(--hover)]"
                       >
 
                         {visibleProperties.map(
@@ -1718,7 +1739,7 @@ export default function DatabasePage() {
                               key={
                                 property.id
                               }
-                              className="h-9 border-b border-r border-black/[0.09] p-0"
+                              className="h-9 border-b border-r border-[var(--border)] p-0"
                             >
 
                               {property.type ===
@@ -1736,7 +1757,7 @@ export default function DatabasePage() {
                                   <Link
                                     href={`/workspaces/${workspaceId}/databases/${databaseId}?row=${row.id}`}
                                     onClick={() => { rowPaneOpenedFromParent.current = true; }}
-                                    className="mr-2 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                                    className="mr-2 rounded px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"
                                     title="Open row"
                                   >
                                     ↗
@@ -1758,16 +1779,12 @@ export default function DatabasePage() {
                           )
                         )}
 
-                        <td className="border-b border-black/[0.09] text-center">
+                        <td className="border-b border-[var(--border)] text-center">
 
                           <button
                             type="button"
-                            onClick={() =>
-                              removeRow(
-                                row.id
-                              )
-                            }
-                            className="px-3 text-xs text-gray-300 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
+                            onClick={() => setPendingDeletion({ kind: "row", id: row.id })}
+                            className="px-3 text-xs text-[var(--subtle)] opacity-0 transition hover:text-[var(--danger)] group-hover:opacity-100"
                           >
                             ×
                           </button>
@@ -1788,7 +1805,7 @@ export default function DatabasePage() {
                         visibleProperties
                           .length + 1
                       }
-                      className="border-b border-black/[0.09]"
+                      className="border-b border-[var(--border)]"
                     >
 
                       <button
@@ -1797,7 +1814,7 @@ export default function DatabasePage() {
                         disabled={
                           creatingRow
                         }
-                        className="w-full px-4 py-2 text-left text-sm text-gray-400 hover:bg-gray-50 hover:text-gray-700"
+                        className="w-full px-4 py-2 text-left text-sm text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"
                       >
                         + New
                       </button>
@@ -1812,7 +1829,7 @@ export default function DatabasePage() {
 
             </div>
 
-            <div className="mt-3 text-xs text-gray-400">
+            <div className="mt-3 text-xs text-[var(--subtle)]">
               {displayRows.length}{" "}
               {displayRows.length === 1
                 ? "row"
@@ -2212,9 +2229,7 @@ export default function DatabasePage() {
                     disabled={
                       savingProperty
                     }
-                    onClick={
-                      removeProperty
-                    }
+                    onClick={() => setPendingDeletion({ kind: "property" })}
                     className="rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40"
                   >
                     Delete property
@@ -2264,7 +2279,15 @@ export default function DatabasePage() {
 
       )}
 
-      {selectedRow && <aside aria-label="Row detail pane" className="fixed inset-y-0 right-0 z-20 w-full max-w-[52vw] overflow-y-auto border-l border-black/[0.1] bg-white px-6 py-5 shadow-sm"><div className="flex items-center justify-between"><button aria-label="Close row pane" onClick={() => { if (rowPaneOpenedFromParent.current) { rowPaneOpenedFromParent.current = false; router.back(); } else { router.push(`/workspaces/${workspaceId}/databases/${databaseId}`); } }} className="text-sm text-[#787774]">× Close</button><Link aria-label="Expand row" href={`/workspaces/${workspaceId}/databases/${databaseId}/rows/${selectedRow.id}`} className="text-sm text-[#787774]">↗ Expand</Link></div><h2 className="mt-8 text-3xl font-semibold">{String(selectedRow.values.title || "Untitled")}</h2><div className="mt-6 border-y border-black/[0.08] py-2">{database.properties.filter((property) => property.type !== "title").map((property) => <div key={property.id} className="flex min-h-10 items-center"><span className="w-40 shrink-0 text-sm text-[#787774]">{property.name}</span><div className="min-w-0 flex-1">{renderCell(selectedRow, property)}</div></div>)}</div><Comments workspaceId={workspaceId} entityType="database-row" entityId={`${databaseId}:${selectedRow.id}`} /></aside>}
+      {selectedRow && <aside aria-label="Row detail pane" className="fixed inset-y-0 right-0 z-50 w-full max-w-[52vw] overflow-y-auto border-l border-[var(--border)] bg-[var(--surface-elevated)] px-6 py-5 shadow-sm"><div className="flex items-center justify-between"><button aria-label="Close row pane" onClick={() => { if (rowPaneOpenedFromParent.current) { rowPaneOpenedFromParent.current = false; router.back(); } else { router.push(`/workspaces/${workspaceId}/databases/${databaseId}`); } }} className="text-sm text-[var(--muted)]">× Close</button><Link aria-label="Expand row" href={`/workspaces/${workspaceId}/databases/${databaseId}/rows/${selectedRow.id}`} className="text-sm text-[var(--secondary)]">↗ Expand</Link></div><h2 className="proveit-heading mt-8 text-3xl font-semibold">{String(selectedRow.values.title || "Untitled")}</h2><div className="mt-6 border-y border-[var(--border)] py-2">{database.properties.filter((property) => property.type !== "title").map((property) => <div key={property.id} className="flex min-h-10 items-center"><span className="w-40 shrink-0 text-sm text-[var(--muted)]">{property.name}</span><div className="min-w-0 flex-1">{renderCell(selectedRow, property)}</div></div>)}</div><Comments workspaceId={workspaceId} entityType="database-row" entityId={`${databaseId}:${selectedRow.id}`} /></aside>}
+      {viewDialog && <div role="dialog" aria-modal="true" aria-label={viewDialog === "delete" ? "Delete saved view" : viewDialog === "rename" ? "Rename saved view" : "Create saved view"} className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4" onKeyDown={(event) => { if (event.key === "Escape" && !savingView) setViewDialog(null); }}>
+        <form onSubmit={(event) => { event.preventDefault(); if (viewDialog === "delete") void deleteActiveView(); else void submitViewDialog(); }} className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 shadow-[var(--shadow-md)]">
+          <h2 className="proveit-section-title">{viewDialog === "delete" ? "Delete saved view?" : viewDialog === "rename" ? "Rename saved view" : "Create saved view"}</h2>
+          {viewDialog === "delete" ? <p className="mt-2 text-sm text-[var(--muted)]">This removes only the saved table configuration. Database records remain unchanged.</p> : <label className="mt-5 block text-sm font-medium">View name<input autoFocus required maxLength={100} value={viewName} onChange={(event) => setViewName(event.target.value)} className="proveit-control mt-2 w-full px-3 py-2" /></label>}
+          <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={savingView} onClick={() => setViewDialog(null)} className="proveit-secondary-button">Cancel</button><button disabled={savingView || (viewDialog !== "delete" && !viewName.trim())} className={viewDialog === "delete" ? "rounded-lg bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white" : "proveit-primary-button"}>{savingView ? "Saving…" : viewDialog === "delete" ? "Delete view" : "Save view"}</button></div>
+        </form>
+      </div>}
+      {pendingDeletion && <div role="dialog" aria-modal="true" aria-label={pendingDeletion.kind === "row" ? "Delete row" : "Delete property"} className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4"><section className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 shadow-[var(--shadow-md)]"><h2 className="proveit-section-title">Delete {pendingDeletion.kind}?</h2><p className="mt-2 text-sm text-[var(--muted)]">This action cannot be undone.</p><div className="mt-6 flex justify-end gap-3"><button type="button" className="proveit-secondary-button" onClick={() => setPendingDeletion(null)}>Cancel</button><button type="button" className="rounded-lg bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white" onClick={() => { const pending = pendingDeletion; setPendingDeletion(null); if (pending.kind === "row") void removeRow(pending.id); else void removeProperty(); }}>Delete</button></div></section></div>}
     </main>
   );
 }

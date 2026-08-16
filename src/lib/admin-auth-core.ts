@@ -6,6 +6,7 @@ export type DecodedAdminToken = {
 export type AdminUserProfile = {
   active?: unknown;
   role?: unknown;
+  capabilities?: unknown;
   [key: string]: unknown;
 };
 
@@ -55,10 +56,11 @@ export function isAdminCredentialFailure(
     code === "auth/internal-error";
 }
 
-export async function authorizeBOD(
+export async function authorizeCapability(
   request: Request,
   operation: string,
-  dependencies: AdminAuthDependencies
+  dependencies: AdminAuthDependencies,
+  capability: "manageEmployees" | "manageWorkspaces" | "manageGlobalSettings"
 ) {
   const authorization =
     request.headers.get("authorization");
@@ -154,9 +156,23 @@ export async function authorizeBOD(
     );
   }
 
-  if (profile.role !== "bod") {
+  const explicitCapabilities = profile.capabilities;
+  const hasExplicitCapability =
+    typeof explicitCapabilities === "object" &&
+    explicitCapabilities !== null &&
+    (explicitCapabilities as Record<string, unknown>)[capability] === true;
+
+  // Existing BOD accounts remain administrators until they are migrated to
+  // explicit capabilities. Explicit capability documents always take
+  // precedence when present, including an explicitly false value.
+  const hasCapabilityField =
+    typeof explicitCapabilities === "object" &&
+    explicitCapabilities !== null &&
+    capability in explicitCapabilities;
+
+  if (!hasExplicitCapability && (hasCapabilityField || profile.role !== "bod")) {
     throw new AdminAuthError(
-      "BOD access required.",
+      "Administrative capability required.",
       403
     );
   }
@@ -166,4 +182,13 @@ export async function authorizeBOD(
     email: decodedToken.email ?? null,
     profile,
   };
+}
+
+/** @deprecated Use authorizeCapability with a named capability. */
+export function authorizeBOD(
+  request: Request,
+  operation: string,
+  dependencies: AdminAuthDependencies
+) {
+  return authorizeCapability(request, operation, dependencies, "manageEmployees");
 }

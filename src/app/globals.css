@@ -1,22 +1,28 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8f8f7;
-  --foreground: #292927;
+  --text: #212a31;
+  --background: #FAFAFA;
+  --primary: #bf6d21;
+  --secondary: #0577b0;
+  --accent: #03625c;
+  --foreground: var(--text);
   --surface: #ffffff;
-  --sidebar: #f4f4f2;
-  --hover: #ececea;
-  --active: #e7e7e4;
-  --selected: #e7f0fb;
-  --border: rgba(41, 41, 39, 0.13);
-  --border-strong: rgba(41, 41, 39, 0.2);
-  --muted: #696965;
-  --subtle: #8d8d88;
-  --accent: #1f2937;
-  --accent-proveit-blue: #3b82c4;
-  --accent-teal: #168b86;
-  --accent-orange: #d97732;
-  --accent-charcoal: #292927;
+  --surface-elevated: #ffffff;
+  --surface-muted: #f3f5f5;
+  --input: #ffffff;
+  --sidebar: #f6f7f7;
+  --hover: #edf3f5;
+  --active: #e3ecef;
+  --selected: #e3f1f7;
+  --border: rgba(33, 42, 49, 0.14);
+  --border-strong: rgba(33, 42, 49, 0.25);
+  --muted: #5a6871;
+  --subtle: #77858d;
+  --accent-proveit-blue: var(--secondary);
+  --accent-teal: var(--accent);
+  --accent-orange: var(--primary);
+  --accent-charcoal: var(--text);
   --tag-gray-bg: #eef1f5;
   --tag-gray-fg: #4d5560;
   --tag-blue-bg: #e5f0fb;
@@ -36,11 +42,13 @@
   --tag-pink-bg: #fce8f1;
   --tag-pink-fg: #ad3d72;
   --danger: #d44c47;
-  --focus: #3b82c4;
+  --success: var(--accent);
+  --warning: #956a00;
+  --focus: var(--secondary);
   --status-neutral-bg: #eef1f5;
   --status-neutral-fg: #455468;
-  --status-positive-bg: #eaf6ed;
-  --status-positive-fg: #256b3c;
+  --status-positive-bg: color-mix(in srgb, var(--accent), transparent 86%);
+  --status-positive-fg: var(--accent);
   --status-warning-bg: #fbf2dd;
   --status-warning-fg: #805d16;
   --status-danger-bg: #f9e8e7;
@@ -49,22 +57,95 @@
   --shadow-md: 0 12px 30px rgba(28, 28, 26, 0.08), 0 2px 8px rgba(28, 28, 26, 0.04);
 }
 
+:root[data-theme="dark"] {
+    --text: #ced7de;
+    --background: #262c27;
+    --primary: #d9873a;
+    --secondary: #99ddff;
+    --accent: #41d2c9;
+    --foreground: var(--text);
+    --surface: #303832;
+    --surface-elevated: #374139;
+    --surface-muted: #29312c;
+    --input: #2d3530;
+    --sidebar: #202622;
+    --hover: #39443d;
+    --active: #455249;
+    --selected: #193f49;
+    --border: rgba(206, 215, 222, 0.17);
+    --border-strong: rgba(206, 215, 222, 0.29);
+    --muted: #a6b4b9;
+    --subtle: #849399;
+    --danger: #f2aaa5;
+    --success: var(--accent);
+    --warning: #f1d36e;
+    --status-neutral-bg: #3a464a;
+    --status-neutral-fg: #ced7de;
+    --status-warning-bg: #54451f;
+    --status-warning-fg: #f1d36e;
+    --status-danger-bg: #5a302f;
+    --status-danger-fg: #f2aaa5;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24), 0 1px 4px rgba(0, 0, 0, 0.12);
+    --shadow-md: 0 14px 34px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.2);
+    --tag-gray-bg: #3a464a;
+    --tag-gray-fg: #ced7de;
+    --tag-blue-bg: #174c60;
+    --tag-blue-fg: #99ddff;
+    --tag-teal-bg: #164c49;
+    --tag-teal-fg: #92eee7;
+    --tag-green-bg: #244b36;
+    --tag-green-fg: #a9e5be;
+    --tag-yellow-bg: #54451f;
+    --tag-yellow-fg: #f1d36e;
+    --tag-orange-bg: #583817;
+    --tag-orange-fg: #f4b779;
+    --tag-red-bg: #5a302f;
+    --tag-red-fg: #f2aaa5;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-montserrat);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
   text-rendering: optimizeLegibility;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+body,
+aside,
+header,
+section,
+input,
+select,
+textarea,
+button {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 180ms;
+  transition-timing-function: ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  aside,
+  header,
+  section,
+  input,
+  select,
+  textarea,
+  button {
+    transition-duration: 0.01ms;
+  }
 }
 
 ::selection {
-  background: #d9e9ff;
+  background: color-mix(in srgb, var(--secondary), transparent 72%);
 }
 
 button,
@@ -83,7 +164,7 @@ input:focus-visible,
 select:focus-visible,
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #7ba8d8;
+  outline: 2px solid var(--secondary);
   outline-offset: 2px;
 }
 
@@ -134,6 +215,7 @@ a:focus-visible {
 }
 
 .proveit-page-title {
+  font-family: var(--font-montserrat), Arial, Helvetica, sans-serif;
   font-size: clamp(2.125rem, 3vw, 3rem);
   font-weight: 670;
   letter-spacing: -0.045em;
@@ -141,6 +223,7 @@ a:focus-visible {
 }
 
 .proveit-section-title {
+  font-family: var(--font-montserrat), Arial, Helvetica, sans-serif;
   font-size: 0.9375rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -160,7 +243,7 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: var(--accent);
+  background: var(--primary);
   color: white;
   font-size: 0.875rem;
   font-weight: 580;
@@ -170,7 +253,7 @@ a:focus-visible {
 }
 
 .proveit-primary-button:hover {
-  background: #111827;
+  background: color-mix(in srgb, var(--primary), var(--text) 16%);
   box-shadow: 0 3px 8px rgba(17, 24, 39, 0.2);
 }
 
@@ -197,6 +280,13 @@ a:focus-visible {
   color: var(--foreground);
 }
 
+.proveit-interaction-link { color: var(--secondary); }
+.proveit-interaction-link:hover { color: color-mix(in srgb, var(--secondary), var(--text) 18%); text-decoration: underline; text-underline-offset: 3px; }
+.proveit-positive-indicator { color: var(--accent); }
+.proveit-nav-active { border-left: 2px solid var(--secondary); background: var(--selected); color: var(--text); }
+.proveit-nav-active [aria-hidden="true"] { color: var(--secondary); }
+.proveit-nav-link:hover { background: var(--hover); color: var(--secondary); }
+
 .proveit-list {
   overflow: hidden;
   border: 1px solid var(--border);
@@ -210,7 +300,7 @@ a:focus-visible {
 }
 
 .proveit-list-row:hover {
-  background: #fafafa;
+  background: var(--hover);
 }
 
 .proveit-side-pane {
@@ -227,19 +317,73 @@ a:focus-visible {
 }
 
 .proveit-priority-low {
-  background: #edf5ee;
-  color: #356341;
+  background: var(--tag-green-bg);
+  color: var(--tag-green-fg);
 }
 
 .proveit-priority-medium {
-  background: #f6f0dd;
-  color: #755b24;
+  background: var(--tag-yellow-bg);
+  color: var(--tag-yellow-fg);
 }
 
 .proveit-priority-high,
 .proveit-priority-urgent {
-  background: #f9e6e4;
-  color: #963b35;
+  background: var(--tag-red-bg);
+  color: var(--tag-red-fg);
+}
+
+.proveit-heading {
+  font-family: var(--font-montserrat), Arial, Helvetica, sans-serif;
+}
+
+.proveit-logo {
+  display: inline-flex;
+  align-items: center;
+}
+
+.proveit-logo-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .proveit-logo-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .proveit-logo-dark {
+  display: block;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-toggle:hover {
+  border-color: var(--border-strong);
+  background: var(--hover);
+  color: var(--text);
+}
+
+.theme-toggle svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.proveit-toast {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
 }
 
 .proveit-status-badge {
@@ -278,8 +422,25 @@ table input:hover,
 table select:hover,
 table input:focus,
 table select:focus {
-  background: #f1f1ef !important;
+  background: var(--hover) !important;
 }
+
+/* Legacy Tailwind utility colours remain readable wherever older workspace
+   screens use them. New UI should use semantic ProveIt tokens directly. */
+:root[data-theme="dark"] .bg-white { background-color: var(--surface) !important; }
+:root[data-theme="dark"] .bg-gray-50 { background-color: var(--surface-muted) !important; }
+:root[data-theme="dark"] .bg-gray-100 { background-color: var(--hover) !important; }
+:root[data-theme="dark"] .bg-gray-900,
+:root[data-theme="dark"] .bg-black { background-color: var(--text) !important; color: var(--background); }
+:root[data-theme="dark"] .text-gray-900,
+:root[data-theme="dark"] .text-black { color: var(--text) !important; }
+:root[data-theme="dark"] .text-gray-700,
+:root[data-theme="dark"] .text-gray-600,
+:root[data-theme="dark"] .text-gray-500 { color: var(--muted) !important; }
+:root[data-theme="dark"] .text-gray-400,
+:root[data-theme="dark"] .text-gray-300 { color: var(--subtle) !important; }
+:root[data-theme="dark"] .border-gray-100,
+:root[data-theme="dark"] .border-gray-200 { border-color: var(--border) !important; }
 
 @media (max-width: 1024px) {
   .proveit-content { padding: 1.5rem 2rem 2.5rem; }
