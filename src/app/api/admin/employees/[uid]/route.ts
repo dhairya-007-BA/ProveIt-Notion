@@ -128,9 +128,6 @@ export async function PATCH(
     const currentName =
       employee?.name as string;
 
-    const currentDepartment =
-      employee?.department as string;
-
     const currentActive =
       employee?.active === true;
 
@@ -217,68 +214,7 @@ export async function PATCH(
           FieldValue.serverTimestamp(),
       });
 
-      // ─────────────────────────────
-      // REMOVE OLD MEMBERSHIPS
-      // ─────────────────────────────
-      //
-      // We rebuild explicit memberships
-      // from the employee's current role.
-      //
-      // BOD has role-based access and
-      // therefore requires no explicit
-      // team membership.
-
-      const membershipsSnapshot =
-        await adminDb
-          .collection(
-            "workspaceMemberships"
-          )
-          .where("userId", "==", uid)
-          .get();
-
-      membershipsSnapshot.docs.forEach(
-        (membershipDocument) => {
-          batch.delete(
-            membershipDocument.ref
-          );
-        }
-      );
-
-      // ─────────────────────────────
-      // CREATE NEW MEMBERSHIP
-      // ─────────────────────────────
-
-      if (role !== "bod") {
-        const membershipId =
-          `${newDepartment}_${uid}`;
-
-        const membershipRef =
-          adminDb
-            .collection(
-              "workspaceMemberships"
-            )
-            .doc(membershipId);
-
-        batch.set(membershipRef, {
-          workspaceId:
-            newDepartment,
-
-          userId: uid,
-
-          role: "member",
-
-          active: currentActive,
-
-          createdBy:
-            administrator.uid,
-
-          createdAt:
-            FieldValue.serverTimestamp(),
-
-          updatedAt:
-            FieldValue.serverTimestamp(),
-        });
-      }
+      // Role and department edits never alter canonical membership documents.
 
       await batch.commit();
     } catch (firestoreError) {

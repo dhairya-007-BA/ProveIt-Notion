@@ -1,66 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
-
+import { collection, doc, onSnapshot, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
 import { useAuth } from "@/components/auth-provider";
 import { db } from "@/lib/firebase";
-import { getUsers } from "@/lib/users";
-import { ProveItUser } from "@/types/user";
+import { authenticatedRequest } from "@/lib/authenticated-request";
 
 type EntityType = "meeting" | "task" | "document" | "database-row";
-type Comment = { id: string; body: string; authorUid: string; authorName: string; createdAt?: Date; parentCommentId?: string | null };
+type Comment = { id: string; body: string; authorUid: string; authorName: string; createdAt?: Date; editedAt?: Date };
+const MAX_COMMENT_LENGTH = 4000;
 
 export function Comments({ workspaceId, entityType, entityId }: { workspaceId: string; entityType: EntityType; entityId: string }) {
   const { firebaseUser, profile } = useAuth();
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [users, setUsers] = useState<ProveItUser[]>([]);
-  const [body, setBody] = useState("");
-  const [mention, setMention] = useState("");
-  const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
-  const [error, setError] = useState("");
-  const [posting, setPosting] = useState(false);
-
-  useEffect(() => {
-    if (!firebaseUser) return;
-    void getUsers().then(setUsers).catch(() => setError("People could not be loaded."));
-    return onSnapshot(query(collection(db, "comments"), where("workspaceId", "==", workspaceId), where("entityId", "==", entityId)), (snapshot) => setComments(snapshot.docs.map((item) => ({ id: item.id, body: item.data().body || "", authorUid: item.data().authorUid || "", authorName: item.data().authorName || "Unknown employee", parentCommentId: item.data().parentCommentId || null, createdAt: item.data().createdAt?.toDate() })).sort((left, right) => (left.createdAt?.getTime() || 0) - (right.createdAt?.getTime() || 0))), (listenerError) => { console.error("Failed to load comments:", listenerError); setError("Comments could not be loaded."); });
-  }, [entityId, firebaseUser, workspaceId]);
-
-  async function postComment() {
-    if (!firebaseUser || !profile || !body.trim() || posting) return;
-    const mentioned = users.find((user) => user.uid === mention);
-    try {
-      setPosting(true);
-      setError("");
-      const batch = writeBatch(db);
-      const commentRef = doc(collection(db, "comments"));
-      batch.set(commentRef, { workspaceId, entityType, entityId, body: body.trim(), authorUid: firebaseUser.uid, authorName: profile.name, mentionedUid: mentioned?.uid || null, parentCommentId: replyingTo?.id || null, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      const recipients = new Set<string>();
-      if (mentioned && mentioned.uid !== firebaseUser.uid && (await getDoc(doc(db, "users", mentioned.uid))).data()?.notificationPreferences?.mentions !== false) recipients.add(mentioned.uid);
-      if (replyingTo && replyingTo.authorUid !== firebaseUser.uid) recipients.add(replyingTo.authorUid);
-      recipients.forEach((recipientUid) => batch.set(doc(collection(db, "notifications")), { recipientUid, workspaceId, type: mentioned?.uid === recipientUid ? "mention" : "comment_reply", title: mentioned?.uid === recipientUid ? "You were mentioned" : "New reply", message: `${profile.name} ${mentioned?.uid === recipientUid ? "mentioned you" : "replied to your comment"}.`, entityType, entityId, commentId: commentRef.id, actorUid: firebaseUser.uid, createdAt: serverTimestamp(), readAt: null, archivedAt: null }));
-      await batch.commit();
-      setBody("");
-      setMention("");
-      setReplyingTo(null);
-    } catch (postError) {
-      console.error("Failed to post comment:", postError);
-      setError("Comment could not be posted.");
-    } finally {
-      setPosting(false);
-    }
-  }
-
-  const roots = comments.filter((comment) => !comment.parentCommentId);
-  return <section className="mt-9 border-t border-[var(--border)] pt-6"><div className="flex items-baseline justify-between"><h2 className="proveit-section-title">Comments</h2><span className="text-xs text-[var(--subtle)]">{comments.length || "No"} {comments.length === 1 ? "comment" : "comments"}</span></div><div className="mt-5 space-y-5">{roots.map((comment) => <Thread key={comment.id} comment={comment} replies={comments.filter((reply) => reply.parentCommentId === comment.id)} onReply={setReplyingTo} />)}{!error && roots.length === 0 && <p className="py-3 text-sm text-[var(--muted)]">Start the conversation for this record.</p>}</div><div className="mt-6 rounded-xl border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-sm)]">{replyingTo && <p className="mb-2 text-xs text-[var(--muted)]">Replying to <strong className="font-medium text-[var(--foreground)]">{replyingTo.authorName}</strong> <button onClick={() => setReplyingTo(null)} className="ml-1 underline hover:text-[var(--foreground)]">Cancel</button></p>}<textarea aria-label="Comment" value={body} onChange={(event) => setBody(event.target.value)} placeholder={replyingTo ? "Write a reply…" : "Add a comment…"} className="min-h-24 w-full resize-y rounded-lg border border-transparent bg-[var(--sidebar)] px-3 py-2.5 text-sm leading-6 outline-none transition placeholder:text-[var(--subtle)] focus:border-[var(--focus)] focus:bg-white" /><div className="mt-3 flex items-center justify-between gap-3"><select aria-label="Mention teammate" value={mention} onChange={(event) => setMention(event.target.value)} className="rounded-lg border border-transparent bg-[var(--sidebar)] px-2.5 py-2 text-sm hover:border-[var(--border)]"><option value="">Mention someone…</option>{users.filter((user) => user.active && user.uid !== firebaseUser?.uid).map((user) => <option key={user.uid} value={user.uid}>@{user.name}</option>)}</select><button data-testid="comment-submit" onClick={postComment} disabled={!body.trim() || posting} className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50">{posting ? "Posting…" : replyingTo ? "Reply" : "Comment"}</button></div>{error && <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{error}</p>}</div></section>;
+  const [comments, setComments] = useState<Comment[]>([]); const [body, setBody] = useState(""); const [error, setError] = useState(""); const [posting, setPosting] = useState(false);
+  useEffect(() => { if (!firebaseUser) return; return onSnapshot(query(collection(db, "comments"), where("workspaceId", "==", workspaceId), where("entityId", "==", entityId)), (snapshot) => setComments(snapshot.docs.map((item) => ({ id: item.id, body: item.data().body || "", authorUid: item.data().authorUid || "", authorName: item.data().authorName || "Employee", createdAt: item.data().createdAt?.toDate(), editedAt: item.data().editedAt?.toDate() })).sort((left, right) => (left.createdAt?.getTime() || 0) - (right.createdAt?.getTime() || 0))), () => setError("Comments could not be loaded.")); }, [entityId, firebaseUser, workspaceId]);
+  async function post() { const text = body.trim(); if (!firebaseUser || !profile || !text || text.length > MAX_COMMENT_LENGTH || posting) return; setPosting(true); setError(""); try { if (entityType === "task") { const response = await authenticatedRequest(firebaseUser, `/api/tasks/${entityId}/comments`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body: text }) }); if (!response.ok) throw new Error("comment"); } else { const batch = writeBatch(db); batch.set(doc(collection(db, "comments")), { workspaceId, entityType, entityId, body: text, authorUid: firebaseUser.uid, authorName: profile.name, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }); await batch.commit(); } setBody(""); } catch { setError("Comment could not be posted."); } finally { setPosting(false); } }
+  async function edit(comment: Comment, text: string) { if (!firebaseUser || entityType !== "task") return; const response = await authenticatedRequest(firebaseUser, `/api/tasks/${entityId}/comments/${comment.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body: text }) }); if (!response.ok) setError("Comment could not be updated."); }
+  async function remove(comment: Comment) { if (!firebaseUser || entityType !== "task") return; const response = await authenticatedRequest(firebaseUser, `/api/tasks/${entityId}/comments/${comment.id}`, { method: "DELETE" }); if (!response.ok) setError("Comment could not be deleted."); }
+  return <section className="mt-9 border-t border-[var(--border)] pt-6"><div className="flex items-baseline justify-between"><h2 className="proveit-section-title">Activity &amp; comments</h2><span className="text-xs text-[var(--subtle)]">{comments.length || "No"} {comments.length === 1 ? "comment" : "comments"}</span></div>{!comments.length && !error ? <p className="mt-4 text-sm text-[var(--muted)]">No comments yet. Start the conversation about this task.</p> : <div className="mt-5 divide-y divide-[var(--border)]">{comments.map((comment) => <CommentItem key={comment.id} comment={comment} editable={entityType === "task" && comment.authorUid === firebaseUser?.uid} onEdit={edit} onDelete={remove} />)}</div>}<div className="mt-6 flex gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-sm)]"><span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--active)] text-xs font-semibold">{profile?.name?.slice(0, 2).toUpperCase() || "ME"}</span><div className="min-w-0 flex-1"><textarea aria-label="Write a comment" maxLength={MAX_COMMENT_LENGTH} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write a comment…" className="min-h-24 w-full resize-y rounded-lg border border-transparent bg-[var(--sidebar)] px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-[var(--subtle)] focus:border-[var(--focus)]" /><div className="mt-3 flex items-center justify-between"><span className="text-xs text-[var(--subtle)]">{body.length}/{MAX_COMMENT_LENGTH}</span><button data-testid="comment-submit" onClick={() => void post()} disabled={!body.trim() || posting} className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50">{posting ? "Sending…" : "Send comment"}</button></div></div></div>{error ? <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{error}</p> : null}</section>;
 }
 
-function Thread({ comment, replies, onReply }: { comment: Comment; replies: Comment[]; onReply: (comment: Comment) => void }) {
-  const [showReplies, setShowReplies] = useState(true);
-  return <article><CommentItem comment={comment} onReply={onReply} />{replies.length > 0 && <div className="ml-4 mt-3 border-l border-[var(--border)] pl-4"><button onClick={() => setShowReplies(!showReplies)} className="mb-2 text-xs text-[var(--muted)] transition hover:text-[var(--foreground)]">{showReplies ? "Hide" : "Show"} {replies.length} {replies.length === 1 ? "reply" : "replies"}</button>{showReplies && <div className="space-y-3">{replies.map((reply) => <CommentItem key={reply.id} comment={reply} onReply={onReply} />)}</div>}</div>}</article>;
-}
-
-function CommentItem({ comment, onReply }: { comment: Comment; onReply: (comment: Comment) => void }) {
-  return <div className="group flex gap-3 rounded-lg px-2 py-1.5 transition hover:bg-[var(--hover)]"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--active)] text-[11px] font-medium text-[var(--muted)]">{comment.authorName.slice(0, 1).toUpperCase()}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-baseline gap-x-2"><p className="text-sm font-medium">{comment.authorName}</p><time className="text-xs text-[var(--subtle)]">{comment.createdAt?.toLocaleString() || "Just now"}</time></div><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--foreground)]">{comment.body}</p><button onClick={() => onReply(comment)} className="mt-1.5 text-xs text-[var(--muted)] opacity-0 transition hover:text-[var(--foreground)] focus:opacity-100 group-hover:opacity-100">Reply</button></div></div>;
+function CommentItem({ comment, editable, onEdit, onDelete }: { comment: Comment; editable: boolean; onEdit: (comment: Comment, text: string) => Promise<void>; onDelete: (comment: Comment) => Promise<void> }) {
+  const [editing, setEditing] = useState(false); const [text, setText] = useState(comment.body); const [confirming, setConfirming] = useState(false);
+  return <article className="flex gap-3 py-4"><span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--active)] text-xs font-semibold">{comment.authorName.slice(0, 2).toUpperCase()}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-baseline gap-x-2"><p className="text-sm font-medium">{comment.authorName}</p><time className="text-xs text-[var(--subtle)]">{comment.createdAt?.toLocaleString() || "Just now"}</time>{comment.editedAt ? <span className="text-xs text-[var(--subtle)]">Edited</span> : null}</div>{editing ? <><textarea aria-label="Edit comment" value={text} maxLength={MAX_COMMENT_LENGTH} onChange={(event) => setText(event.target.value)} className="proveit-control mt-2 min-h-20 w-full px-3 py-2" /><div className="mt-2 flex gap-2"><button className="text-xs text-[var(--secondary)]" onClick={() => { void onEdit(comment, text.trim()); setEditing(false); }}>Save</button><button className="text-xs text-[var(--muted)]" onClick={() => { setText(comment.body); setEditing(false); }}>Cancel</button></div></> : <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{comment.body}</p>}{editable && !editing ? <div className="mt-2 flex gap-3 text-xs">{confirming ? <><span>Delete this comment?</span><button className="text-[var(--danger)]" onClick={() => void onDelete(comment)}>Delete</button><button className="text-[var(--muted)]" onClick={() => setConfirming(false)}>Cancel</button></> : <><button className="text-[var(--secondary)]" onClick={() => setEditing(true)}>Edit</button><button className="text-[var(--muted)]" onClick={() => setConfirming(true)}>Delete</button></>}</div> : null}</div></article>;
 }

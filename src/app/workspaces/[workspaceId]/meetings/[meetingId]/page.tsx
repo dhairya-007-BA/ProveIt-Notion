@@ -32,5 +32,5 @@ export default function MeetingDetailPage() {
   if (!firebaseUser || !profile || !meeting) return <main className="grid min-h-screen place-items-center text-sm text-[var(--danger)]">{error}</main>;
   const canDelete = profile.group === "bod";
 
-  return <RecordDetailShell backHref={`/workspaces/${workspaceId}/meetings`} backLabel="Meetings"><MeetingEditor meeting={meeting} currentUserId={firebaseUser.uid} canDelete={canDelete} onDeleted={() => router.replace(`/workspaces/${workspaceId}/meetings`)} /></RecordDetailShell>;
+  return <RecordDetailShell backHref={`/workspaces/${workspaceId}/meetings`} backLabel="Meetings"><MeetingEditor key={meeting.id} meeting={meeting} currentUserId={firebaseUser.uid} canDelete={canDelete} onDeleted={() => router.replace(`/workspaces/${workspaceId}/meetings`)} /></RecordDetailShell>;
 }

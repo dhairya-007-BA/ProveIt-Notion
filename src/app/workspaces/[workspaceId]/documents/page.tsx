@@ -17,8 +17,10 @@ import {
 } from "firebase/firestore";
 
 import Sidebar from "@/components/sidebar";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAuth } from "@/components/auth-provider";
 import { db } from "@/lib/firebase";
+import { filterDocuments } from "@/lib/document-search";
 
 interface WorkspaceDocument {
   id: string;
@@ -56,6 +58,9 @@ export default function DocumentsPage() {
 
   const [deletingId, setDeletingId] =
     useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pendingDeletion, setPendingDeletion] = useState<WorkspaceDocument | null>(null);
+  const visibleDocuments = filterDocuments(documents, searchQuery);
 
   const [error, setError] =
     useState("");
@@ -236,20 +241,8 @@ export default function DocumentsPage() {
   /*
    * Delete a document.
    */
-  async function deleteDocument(
-    documentId: string,
-    documentTitle: string
-  ) {
+  async function deleteDocument(documentId: string) {
     if (deletingId) {
-      return;
-    }
-
-    const confirmed =
-      window.confirm(
-        `Delete "${documentTitle}"?\n\nThis cannot be undone.`
-      );
-
-    if (!confirmed) {
       return;
     }
 
@@ -276,6 +269,7 @@ export default function DocumentsPage() {
               documentId
           )
       );
+      setPendingDeletion(null);
     } catch (error) {
       console.error(
         "Failed to delete document:",
@@ -298,8 +292,8 @@ export default function DocumentsPage() {
     loading
   ) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-500">
+      <main className="flex min-h-screen items-center justify-center bg-[var(--background)]">
+        <p className="text-sm text-[var(--muted)]">
           Loading documents...
         </p>
       </main>
@@ -344,7 +338,7 @@ export default function DocumentsPage() {
                 Documents
               </h1>
 
-              <p className="mt-2 text-sm text-gray-500">
+              <p className="mt-2 text-sm text-[var(--muted)]">
                 Create and organize documents
                 for this workspace.
               </p>
@@ -363,10 +357,13 @@ export default function DocumentsPage() {
 
           </div>
 
+          <label className="sr-only" htmlFor="document-search">Search documents</label>
+          <div className="relative mb-5 max-w-md"><input id="document-search" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search documents…" className="proveit-control w-full px-3 py-2 text-sm" /></div>
+
           {/* ERROR */}
 
           {error && (
-            <div className="mb-6 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+            <div className="mb-6 rounded-xl border border-[var(--danger)]/30 bg-[var(--status-danger-bg)] p-4 text-sm text-[var(--danger)]">
               {error}
             </div>
           )}
@@ -375,29 +372,28 @@ export default function DocumentsPage() {
 
           <div className="proveit-list">
 
-            {documents.length === 0 ? (
+            {visibleDocuments.length === 0 ? (
               <div className="px-6 py-16 text-center">
 
                 <div className="text-4xl">
-                  📄
+                  <span aria-hidden>▤</span>
                 </div>
 
                 <h2 className="mt-4 font-semibold">
                   No documents yet
                 </h2>
 
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-500">
-                  Create your first document
-                  for this workspace.
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
+                  {searchQuery.trim() ? "Try another title or clear the search." : "Create your first document for this workspace."}
                 </p>
 
               </div>
             ) : (
-              documents.map(
+              visibleDocuments.map(
                 (document) => (
                   <div
                     key={document.id}
-                    className="proveit-list-row flex items-center justify-between border-b border-gray-100 px-6 py-5 last:border-b-0"
+                    className="proveit-list-row flex items-center justify-between border-b border-[var(--border)] px-6 py-5 last:border-b-0"
                   >
 
                     {/* DOCUMENT LINK */}
@@ -408,7 +404,7 @@ export default function DocumentsPage() {
                     >
 
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--sidebar)]">
-                        📄
+                        <span aria-hidden>▤</span>
                       </div>
 
                       <div className="min-w-0">
@@ -417,7 +413,7 @@ export default function DocumentsPage() {
                           {document.title}
                         </p>
 
-                        <p className="mt-1 text-xs text-gray-400">
+                        <p className="mt-1 text-xs text-[var(--subtle)]">
                           {document.updatedAt
                             ? `Updated ${document.updatedAt.toLocaleDateString()}`
                             : "No update date"}
@@ -437,13 +433,8 @@ export default function DocumentsPage() {
                           deletingId ===
                           document.id
                         }
-                        onClick={() =>
-                          deleteDocument(
-                            document.id,
-                            document.title
-                          )
-                        }
-                        className="rounded-md px-3 py-2 text-sm text-gray-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => setPendingDeletion(document)}
+                        className="rounded-md px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--status-danger-bg)] hover:text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {deletingId ===
                         document.id
@@ -453,7 +444,7 @@ export default function DocumentsPage() {
 
                       <Link
                         href={`/workspaces/${workspaceId}/documents/${document.id}`}
-                        className="text-sm text-gray-300 transition hover:text-gray-600"
+                        className="text-sm text-[var(--subtle)] transition hover:text-[var(--secondary)]"
                       >
                         →
                       </Link>
@@ -469,6 +460,7 @@ export default function DocumentsPage() {
 
         </div>
       </section>
+      <ConfirmDialog open={Boolean(pendingDeletion)} title="Delete document?" description={pendingDeletion ? `“${pendingDeletion.title}” will be permanently deleted. This cannot be undone.` : ""} confirmLabel="Delete document" loading={Boolean(deletingId)} onCancel={() => setPendingDeletion(null)} onConfirm={() => { if (pendingDeletion) void deleteDocument(pendingDeletion.id); }} />
     </main>
   );
 }

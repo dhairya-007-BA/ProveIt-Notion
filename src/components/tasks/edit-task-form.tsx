@@ -17,6 +17,11 @@ import {
 import { db } from "@/lib/firebase";
 import { getUsers } from "@/lib/users";
 import { getMembershipsForWorkspace } from "@/lib/memberships";
+import { useAuth } from "@/components/auth-provider";
+import CustomFieldProperties from "@/components/tasks/custom-field-properties";
+import { saveTaskCustomFields } from "@/lib/task-custom-fields";
+import { syncBusinessTaskDelete, syncBusinessTaskUpdate } from "@/lib/kaneo-business-task-update-sync";
+import { type CustomFieldValue } from "@/lib/custom-fields";
 
 import { ProveItUser } from "@/types/user";
 
@@ -44,6 +49,8 @@ export interface EditableTask {
   createdBy: string;
   createdAt?: Date;
   updatedAt?: Date;
+  customFields?: Record<string, CustomFieldValue>;
+  integration?: { kaneo?: { syncState?: "synced" | "failed" | "ambiguous" | "partial" } };
 }
 
 interface EditTaskFormProps {
@@ -59,6 +66,7 @@ export default function EditTaskForm({
   onDeleted,
   onCancel,
 }: EditTaskFormProps) {
+  const { firebaseUser, profile } = useAuth();
   const [title, setTitle] =
     useState(task.title);
 
@@ -103,8 +111,24 @@ export default function EditTaskForm({
   const [deleting, setDeleting] =
     useState(false);
 
+  const [confirmingDelete, setConfirmingDelete] =
+    useState(false);
+
   const [error, setError] =
     useState("");
+
+  const [customFields, setCustomFields] = useState<Record<string, CustomFieldValue>>(task.customFields ?? {});
+  const [workspaceCanManageProperties, setWorkspaceCanManageProperties] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!firebaseUser) return;
+    void getMembershipsForWorkspace(task.workspaceId).then((memberships) => {
+      const membership = memberships.find((item) => item.userId === firebaseUser.uid);
+      if (!cancelled) setWorkspaceCanManageProperties(membership?.role === "manager" || membership?.role === "admin");
+    }).catch(() => { if (!cancelled) setWorkspaceCanManageProperties(false); });
+    return () => { cancelled = true; };
+  }, [firebaseUser, task.workspaceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -288,6 +312,17 @@ export default function EditTaskForm({
         }
       );
 
+      if (firebaseUser) {
+        const fields = (["title", "description", "status", "priority"] as const).filter((field) => task[field] !== ({ title: cleanTitle, description: description.trim(), status, priority } as typeof task)[field]);
+        const sync = await syncBusinessTaskUpdate(firebaseUser, task.workspaceId, task.id, [...fields]);
+        if (sync && sync.state !== "synced") setError(sync.message || "Task saved, but external sync was not confirmed.");
+      }
+
+      if (firebaseUser) {
+        const customSaved = await saveTaskCustomFields(firebaseUser, task.id, customFields);
+        if (!customSaved) setError("Task saved, but custom properties could not be saved.");
+      }
+
       await onSaved();
     } catch (error) {
       console.error(
@@ -306,8 +341,6 @@ export default function EditTaskForm({
         setError(
           "You don't currently have permission to update this task. Contact a workspace administrator if you believe this is incorrect."
         );
-      } else if (error instanceof Error) {
-        setError(error.message);
       } else {
         setError(
           "Task could not be updated."
@@ -319,15 +352,6 @@ export default function EditTaskForm({
   }
 
   async function handleDelete() {
-    const confirmed =
-      window.confirm(
-        `Delete "${task.title}"? This cannot be undone.`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
     try {
       setDeleting(true);
       setError("");
@@ -337,6 +361,11 @@ export default function EditTaskForm({
         "tasks",
         task.id
       );
+
+      if (firebaseUser && !(await syncBusinessTaskDelete(firebaseUser, task.workspaceId, task.id))) {
+        setError("Task was not deleted because external sync failed.");
+        return;
+      }
 
       await deleteDoc(taskRef);
 
@@ -358,8 +387,6 @@ export default function EditTaskForm({
         setError(
           "You don't currently have permission to delete this task. Contact a workspace administrator if you believe this is incorrect."
         );
-      } else if (error instanceof Error) {
-        setError(error.message);
       } else {
         setError(
           "Task could not be deleted."
@@ -374,17 +401,14 @@ export default function EditTaskForm({
     saving || deleting;
 
   return (
-    <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6">
+    <div className="pb-8">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-          Task
-        </p>
-
-        <h2 className="mt-1 text-lg font-semibold">
+        <p className="proveit-label">Task details</p>
+        <h2 className="proveit-heading mt-1 text-xl font-semibold tracking-[-0.03em]">
           Edit task
         </h2>
 
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
           Update ownership,
           status, priority and
           deadline.
@@ -398,7 +422,7 @@ export default function EditTaskForm({
         {/* TITLE */}
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
+          <label className="mb-2 block text-sm font-medium text-[var(--text)]">
             Task title
           </label>
 
@@ -412,14 +436,16 @@ export default function EditTaskForm({
                 event.target.value
               )
             }
-            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none transition focus:border-gray-400 disabled:bg-gray-50"
+            className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-[var(--secondary)] disabled:opacity-60"
           />
         </div>
+
+        <CustomFieldProperties workspaceId={task.workspaceId} values={customFields} onChange={setCustomFields} people={employees} compact canManage={workspaceCanManageProperties || profile?.group === "bod" || profile?.capabilities?.manageWorkspaces === true} onPersist={async (next) => firebaseUser ? saveTaskCustomFields(firebaseUser, task.id, next) : false} />
 
         {/* DESCRIPTION */}
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700">
+          <label className="mb-2 block text-sm font-medium text-[var(--text)]">
             Description
           </label>
 
@@ -432,18 +458,18 @@ export default function EditTaskForm({
                 event.target.value
               )
             }
-            className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none transition focus:border-gray-400 disabled:bg-gray-50"
+            className="w-full resize-none rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-[var(--secondary)] disabled:opacity-60"
           />
         </div>
 
         {/* DETAILS */}
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2">
 
           {/* STATUS */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
               Status
             </label>
 
@@ -456,7 +482,7 @@ export default function EditTaskForm({
                     .value as EditableTaskStatus
                 )
               }
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm disabled:bg-gray-50"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm disabled:opacity-60"
             >
               <option value="todo">
                 To do
@@ -479,7 +505,7 @@ export default function EditTaskForm({
           {/* PRIORITY */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
               Priority
             </label>
 
@@ -492,7 +518,7 @@ export default function EditTaskForm({
                     .value as EditableTaskPriority
                 )
               }
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm disabled:bg-gray-50"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm disabled:opacity-60"
             >
               <option value="low">
                 Low
@@ -515,7 +541,7 @@ export default function EditTaskForm({
           {/* ASSIGNEE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
               Assignee
             </label>
 
@@ -530,7 +556,7 @@ export default function EditTaskForm({
                   event.target.value
                 )
               }
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm disabled:opacity-60"
             >
               <option value="">
                 {loadingEmployees
@@ -561,7 +587,7 @@ export default function EditTaskForm({
           {/* DUE DATE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
               Due date
             </label>
 
@@ -574,7 +600,7 @@ export default function EditTaskForm({
                   event.target.value
                 )
               }
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-gray-400 disabled:bg-gray-50"
+              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none focus:border-[var(--secondary)] disabled:opacity-60"
             />
           </div>
         </div>
@@ -582,23 +608,32 @@ export default function EditTaskForm({
         {/* ERROR */}
 
         {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="proveit-toast px-4 py-3 text-sm">
             {error}
           </div>
         )}
 
         {/* ACTIONS */}
 
-        <div className="flex flex-col gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+        {confirmingDelete && (
+          <div className="rounded-lg border border-[var(--danger)]/40 bg-[var(--background)] p-4">
+            <p className="text-sm font-medium">Delete this task permanently?</p>
+            <p className="mt-1 text-sm text-[var(--muted)]">This action cannot be undone.</p>
+            <div className="mt-3 flex gap-2">
+              <button type="button" disabled={busy} onClick={handleDelete} className="rounded-lg bg-[var(--danger)] px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{deleting ? "Deleting…" : "Delete permanently"}</button>
+              <button type="button" disabled={busy} onClick={() => setConfirmingDelete(false)} className="proveit-secondary-button disabled:opacity-50">Keep task</button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
             disabled={busy}
-            onClick={handleDelete}
-            className="rounded-lg px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+            onClick={() => setConfirmingDelete(true)}
+            className="rounded-lg px-3 py-2 text-sm font-medium text-[var(--danger)] hover:bg-[var(--hover)] disabled:opacity-50"
           >
-            {deleting
-              ? "Deleting..."
-              : "Delete task"}
+            Delete task
           </button>
 
           <div className="flex justify-end gap-3">
@@ -606,7 +641,7 @@ export default function EditTaskForm({
               type="button"
               disabled={busy}
               onClick={onCancel}
-              className="rounded-lg px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              className="proveit-secondary-button disabled:opacity-50"
             >
               Cancel
             </button>
@@ -614,7 +649,7 @@ export default function EditTaskForm({
             <button
               type="submit"
               disabled={busy}
-              className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving
                 ? "Saving..."

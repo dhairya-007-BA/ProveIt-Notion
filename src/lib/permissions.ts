@@ -1,20 +1,18 @@
-import { UserGroup } from "@/types/user";
+export const GLOBAL_CAPABILITIES = [
+  "manageEmployees",
+  "manageWorkspaces",
+  "manageGlobalSettings",
+] as const;
 
-export type Workspace =
-  | "hq"
-  | "business"
-  | "tech"
-  | "bod";
+export type GlobalCapability = (typeof GLOBAL_CAPABILITIES)[number];
+export type WorkspaceAccessLevel = "member" | "admin";
 
-const permissions: Record<UserGroup, Workspace[]> = {
-  business_intern: ["hq", "business"],
-  tech_intern: ["hq", "tech"],
-  bod: ["hq", "business", "tech", "bod"],
-};
+export type ExplicitCapabilities = Partial<Record<GlobalCapability, boolean>>;
 
-export function canAccessWorkspace(
-  group: UserGroup,
-  workspace: Workspace
-): boolean {
-  return permissions[group].includes(workspace);
+export function hasExplicitCapability(
+  capabilities: unknown,
+  capability: GlobalCapability
+) {
+  return typeof capabilities === "object" && capabilities !== null &&
+    (capabilities as ExplicitCapabilities)[capability] === true;
 }

@@ -158,7 +158,7 @@ describe("admin authentication", () => {
         })
       )
     ).rejects.toMatchObject({
-      message: "BOD access required.",
+      message: "Administrative capability required.",
       status: 403,
     });
   });

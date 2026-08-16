@@ -2,14 +2,25 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { addDoc, collection, onSnapshot, query, serverTimestamp, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import Sidebar from "@/components/sidebar";
 import { useAuth } from "@/components/auth-provider";
 import { MeetingEditor } from "@/components/meetings/meeting-editor";
+import { NewMeetingForm } from "@/components/meetings/new-meeting-form";
 import { db } from "@/lib/firebase";
-import { meetingFromFirestore, meetingStatusLabel, MeetingRecord } from "@/lib/meetings";
+import { getUsers } from "@/lib/users";
+import { meetingFromFirestore, meetingParticipantNames, meetingStatusLabel, MeetingRecord } from "@/lib/meetings";
+import { ProveItUser } from "@/types/user";
+
+type Filter = "all" | "upcoming" | "past" | "mine";
+const isPast = (meeting: MeetingRecord) => Boolean(meeting.startAt && meeting.startAt.getTime() < Date.now());
+const meetingTime = (meeting: MeetingRecord) => meeting.startAt?.toLocaleString() || "Unscheduled";
+
+function MeetingRow({ meeting, attendeeNames, onOpen }: { meeting: MeetingRecord; attendeeNames: string[]; onOpen: () => void }) {
+  return <button type="button" onClick={onOpen} className="proveit-list-row flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-3.5 text-left last:border-0 hover:bg-[var(--hover)] sm:px-5"><span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--sidebar)] text-[var(--secondary)]">◷</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{meeting.title}</p><p className="mt-1 truncate text-xs text-[var(--muted)]">{meetingTime(meeting)}{attendeeNames.length ? ` · ${attendeeNames.join(", ")}` : " · No attendees"}</p></div><span className={`proveit-status-badge shrink-0 proveit-status-${meeting.status}`}>{meetingStatusLabel(meeting.status)}</span></button>;
+}
 
 export default function MeetingsPage() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -17,6 +28,9 @@ export default function MeetingsPage() {
   const searchParams = useSearchParams();
   const { firebaseUser, profile, loading } = useAuth();
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
+  const [users, setUsers] = useState<ProveItUser[]>([]);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const selected = useMemo(() => meetings.find((meeting) => meeting.id === searchParams.get("meeting")) || null, [meetings, searchParams]);
@@ -28,19 +42,23 @@ export default function MeetingsPage() {
       setMeetings(snapshot.docs.map((item) => meetingFromFirestore(item.id, item.data())).sort((left, right) => (right.startAt?.getTime() || right.updatedAt?.getTime() || 0) - (left.startAt?.getTime() || left.updatedAt?.getTime() || 0)));
     }, () => setError("Meetings could not be loaded."));
   }, [firebaseUser, profile, workspaceId]);
-
-  async function createMeeting() {
-    if (!firebaseUser || creating) return;
-    try {
-      setCreating(true); setError("");
-      const ref = await addDoc(collection(db, "meetings"), { title: "Untitled meeting", workspaceId, createdBy: firebaseUser.uid, organizerId: firebaseUser.uid, participantIds: [], status: "scheduled", notes: "", transcript: "", location: "", meetingUrl: "", createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      router.push(`/workspaces/${workspaceId}/meetings?meeting=${ref.id}`);
-    } catch { setError("Meeting could not be created."); } finally { setCreating(false); }
-  }
+  useEffect(() => { let cancelled = false; if (!firebaseUser || !profile) return; void getUsers().then((next) => { if (!cancelled) setUsers(next); }).catch(() => { if (!cancelled) setError("Meeting attendees could not be loaded."); }); return () => { cancelled = true; }; }, [firebaseUser, profile]);
 
   if (loading || (!profile && firebaseUser)) return <main className="grid min-h-screen place-items-center text-sm text-[var(--muted)]">Loading meetings…</main>;
   if (!firebaseUser || !profile) return null;
   const canDelete = profile.group === "bod";
+  const attendeeNames = new Map(meetings.map((meeting) => [meeting.id, meetingParticipantNames(meeting, users)]));
+  const visible = meetings.filter((meeting) => {
+    const haystack = [meeting.title, meeting.notes, ...(attendeeNames.get(meeting.id) || [])].join(" ").toLocaleLowerCase();
+    if (search.trim() && !haystack.includes(search.trim().toLocaleLowerCase())) return false;
+    if (filter === "upcoming") return !isPast(meeting) && meeting.status !== "cancelled";
+    if (filter === "past") return isPast(meeting) || meeting.status === "completed" || meeting.status === "cancelled";
+    return filter !== "mine" || meeting.organizerId === firebaseUser.uid || meeting.participantIds.includes(firebaseUser.uid);
+  });
+  const upcoming = visible.filter((meeting) => !isPast(meeting) && meeting.status !== "cancelled");
+  const past = visible.filter((meeting) => !upcoming.includes(meeting));
+  const open = (meetingId: string) => router.push(`/workspaces/${workspaceId}/meetings?meeting=${meetingId}`);
+  const section = (label: string, entries: MeetingRecord[], empty: string) => <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-sm)]"><header className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 sm:px-5"><h2 className="proveit-section-title text-sm">{label}</h2><span className="text-xs text-[var(--muted)]">{entries.length}</span></header>{entries.length ? entries.map((meeting) => <MeetingRow key={meeting.id} meeting={meeting} attendeeNames={attendeeNames.get(meeting.id) || []} onOpen={() => open(meeting.id)} />) : <p className="px-5 py-8 text-sm text-[var(--muted)]">{empty}</p>}</section>;
 
-  return <main className="flex min-h-screen bg-[var(--background)]"><Sidebar /><section className="proveit-content"><div className={`mx-auto ${selected ? "max-w-none" : "max-w-5xl"}`}><Link href={`/workspaces/${workspaceId}`} className="proveit-back-link px-1">← Back to workspace</Link><header className="proveit-page-header mb-8"><div><p className="proveit-label">Meetings</p><h1 className="proveit-page-title mt-1">Meetings</h1><p className="mt-3 text-sm text-[var(--muted)]">Plan, run, and record conversations with your workspace.</p></div><button onClick={createMeeting} disabled={creating} className="proveit-primary-button disabled:opacity-50">{creating ? "Creating…" : "New meeting"}</button></header>{error && <p role="alert" className="mb-4 text-sm text-[var(--danger)]">{error}</p>}<div className={selected ? "grid min-w-0 grid-cols-1 min-[1351px]:grid-cols-[minmax(0,1fr)_minmax(430px,40%)]" : ""}><div className="proveit-list min-w-0">{meetings.map((meeting) => <button key={meeting.id} onClick={() => router.push(`/workspaces/${workspaceId}/meetings?meeting=${meeting.id}`)} className="proveit-list-row flex w-full items-center gap-3 border-b border-[var(--border)] px-5 py-4 text-left last:border-0 hover:bg-[var(--hover)]"><span aria-hidden className="grid h-9 w-9 place-items-center rounded-lg bg-[var(--sidebar)]">◷</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{meeting.title}</p><p className="mt-1 text-xs text-[var(--subtle)]">{meeting.startAt?.toLocaleString() || meeting.updatedAt?.toLocaleString() || "Not scheduled"}</p></div><span className={`proveit-status-badge proveit-status-${meeting.status}`}>{meetingStatusLabel(meeting.status)}</span></button>)}{meetings.length === 0 && <p className="px-5 py-12 text-sm text-[var(--muted)]">No meetings yet. Create the first meeting for this workspace.</p>}</div>{selected && <aside aria-label="Meeting detail pane" className="proveit-side-pane min-h-[calc(100vh-10rem)] border-l border-[var(--border)] px-5 py-4 min-[1351px]:sticky min-[1351px]:top-0"><div className="sticky top-0 z-10 flex justify-between bg-[var(--surface)] pb-3"><button aria-label="Close meeting pane" onClick={() => router.push(`/workspaces/${workspaceId}/meetings`)} className="proveit-secondary-button">× Close</button><Link aria-label="Expand meeting" href={`/workspaces/${workspaceId}/meetings/${selected.id}`} className="proveit-secondary-button">↗ Expand</Link></div><div className="max-h-[calc(100vh-13rem)] overflow-y-auto pr-1"><MeetingEditor meeting={selected} currentUserId={firebaseUser.uid} canDelete={canDelete} compact onDeleted={() => router.push(`/workspaces/${workspaceId}/meetings`)} /></div></aside>}</div></div></section></main>;
+  return <main className="flex min-h-screen bg-[var(--background)]"><Sidebar /><section className="proveit-content"><div className="mx-auto max-w-6xl"><Link href={`/workspaces/${workspaceId}`} className="proveit-back-link px-1">← Back to workspace</Link><header className="proveit-page-header mb-6"><div><p className="proveit-label">{workspaceId} workspace</p><h1 className="proveit-page-title mt-1">Meetings</h1><p className="mt-3 text-sm text-[var(--muted)]">Plan, run, and capture the conversations that move work forward.</p></div><button type="button" onClick={() => setCreating(true)} className="proveit-primary-button">+ New meeting</button></header>{error && <p role="alert" className="mb-4 rounded-lg border border-[var(--danger)]/30 bg-[var(--status-danger-bg)] px-3 py-2 text-sm text-[var(--danger)]">{error}</p>}<div className="mb-6 flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-sm)] sm:flex-row sm:items-center"><label className="relative min-w-0 flex-1"><span className="sr-only">Search meetings</span><input aria-label="Search meetings" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search meetings, notes, or attendees" className="proveit-control w-full px-3 py-2 pr-9" />{search && <button type="button" aria-label="Clear meeting search" onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)]">×</button>}</label><div className="flex flex-wrap gap-1" aria-label="Meeting filters">{(["all", "upcoming", "past", "mine"] as Filter[]).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={`rounded-md px-3 py-2 text-sm capitalize transition ${filter === value ? "bg-[var(--selected)] font-medium text-[var(--text)]" : "text-[var(--muted)] hover:bg-[var(--hover)]"}`}>{value === "all" ? "All" : value === "mine" ? "My meetings" : value}</button>)}</div></div>{filter === "all" ? <div className="grid gap-6 lg:grid-cols-2">{section("Upcoming", upcoming, search ? "No upcoming meetings match your search." : "No upcoming meetings. Create one when you are ready.")}{section("Past", past, search ? "No past meetings match your search." : "No past meetings yet.")}</div> : section(filter === "mine" ? "My meetings" : filter === "upcoming" ? "Upcoming meetings" : "Past meetings", visible, "No meetings match this view.")}</div>{selected && <aside aria-label="Meeting detail pane" className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[620px] flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-md)]"><header className="flex shrink-0 items-center justify-end gap-3 border-b border-[var(--border)] px-4 py-3 sm:px-5"><Link href={`/workspaces/${workspaceId}/meetings/${selected.id}`} className="proveit-secondary-button hidden sm:inline-flex">Open full page</Link><button type="button" aria-label="Close meeting detail" onClick={() => router.push(`/workspaces/${workspaceId}/meetings`)} className="proveit-secondary-button">Close <span aria-hidden="true">×</span></button></header><div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5"><MeetingEditor key={selected.id} meeting={selected} currentUserId={firebaseUser.uid} canDelete={canDelete} compact onDeleted={() => router.push(`/workspaces/${workspaceId}/meetings`)} /></div></aside>}{creating && <aside aria-label="New meeting panel" className="fixed inset-y-0 right-0 z-50 w-full max-w-xl border-l border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-md)]"><NewMeetingForm workspaceId={workspaceId} currentUserId={firebaseUser.uid} onCancel={() => setCreating(false)} onCreated={(meetingId) => { setCreating(false); open(meetingId); }} /></aside>}</section></main>;
 }

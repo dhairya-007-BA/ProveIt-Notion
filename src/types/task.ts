@@ -43,4 +43,16 @@ export interface ProveItTask {
   documentIds?: string[];
 
   archived?: boolean;
+
+  customFields?: Record<string, string | number | boolean | string[] | null>;
+
+  integration?: {
+    kaneo?: {
+      taskId: string;
+      projectId: string;
+      syncState?: "synced" | "failed" | "ambiguous" | "partial";
+      syncedAt?: Date;
+      lastSyncAt?: Date;
+    };
+  };
 }

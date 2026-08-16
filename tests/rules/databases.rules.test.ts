@@ -41,6 +41,9 @@ async function seedDatabase() {
       await setDoc(doc(firestore, "workspaces", "company"), { active: true });
       await setDoc(doc(firestore, "workspaces", "business"), { active: true });
       await setDoc(doc(firestore, "workspaces", "technology"), { active: true });
+      await setDoc(doc(firestore, "tasks", "custom-fields-task"), {
+        workspaceId: "business", title: "Protected custom fields", status: "todo", priority: "medium", createdBy: "company-member", customFields: { historicalField: "retained" },
+      });
       await setDoc(doc(firestore, "workspaces", "tombstoned"), {
         active: false,
         deletedAt: new Date(),
@@ -284,11 +287,18 @@ describe("database Firestore rules", () => {
   it("allows members to query and reply to comments in their workspace", async () => {
     const firestore = testEnv.authenticatedContext("company-member").firestore();
     await assertSucceeds(setDoc(doc(firestore, "comments", "comment-parent"), {
-      workspaceId: "business", entityType: "task", entityId: "task-1", authorUid: "company-member",
+      workspaceId: "business", entityType: "meeting", entityId: "meeting-1", authorUid: "company-member",
     }));
-    await assertSucceeds(getDocs(query(collection(firestore, "comments"), where("workspaceId", "==", "business"), where("entityId", "==", "task-1"))));
+    await assertSucceeds(getDocs(query(collection(firestore, "comments"), where("workspaceId", "==", "business"), where("entityId", "==", "meeting-1"))));
     await assertSucceeds(setDoc(doc(firestore, "comments", "comment-reply"), {
-      workspaceId: "business", entityType: "task", entityId: "task-1", authorUid: "company-member", parentCommentId: "comment-parent",
+      workspaceId: "business", entityType: "meeting", entityId: "meeting-1", authorUid: "company-member", parentCommentId: "comment-parent",
+    }));
+  });
+
+  it("rejects direct client task-comment mutation so task comments use the protected route", async () => {
+    const firestore = testEnv.authenticatedContext("company-member").firestore();
+    await assertFails(setDoc(doc(firestore, "comments", "task-comment-direct"), {
+      workspaceId: "business", entityType: "task", entityId: "task-1", authorUid: "company-member", body: "Spoof attempt",
     }));
   });
 
@@ -413,5 +423,18 @@ describe("task creation Firestore rules", () => {
     await assertSucceeds(
       createTaskAndActivity("bod-member", "business", "bod-business-task")
     );
+  });
+});
+
+describe("custom task field Firestore boundary", () => {
+  it("rejects direct client creation of a custom field map", async () => {
+    const firestore = testEnv.authenticatedContext("company-member").firestore();
+    await assertFails(setDoc(doc(firestore, "tasks", "client-custom-fields-task"), { workspaceId: "business", title: "Blocked", status: "todo", priority: "medium", createdBy: "company-member", customFields: { arbitrary: "value" } }));
+  });
+
+  it("rejects direct client changes to an existing custom field map while preserving standard edits", async () => {
+    const firestore = testEnv.authenticatedContext("company-member").firestore();
+    await assertFails(updateDoc(doc(firestore, "tasks", "custom-fields-task"), { customFields: { arbitrary: "value" } }));
+    await assertSucceeds(updateDoc(doc(firestore, "tasks", "custom-fields-task"), { title: "Standard edit remains permitted" }));
   });
 });

@@ -12,6 +12,7 @@ export type WorkspaceRole =
 export interface WorkspaceMembership {
   workspaceId: string;
   role: WorkspaceRole;
+  accessLevel?: "member" | "admin";
 }
 
 export interface ProveItUser {
@@ -20,10 +21,17 @@ export interface ProveItUser {
   employeeId: string;
   name: string;
   email?: string;
+  phoneNumber?: string;
+  department?: string;
 
   group: UserGroup;
 
   active: boolean;
+  capabilities?: {
+    manageEmployees?: boolean;
+    manageWorkspaces?: boolean;
+    manageGlobalSettings?: boolean;
+  };
 
   /*
    * When true, the employee has signed

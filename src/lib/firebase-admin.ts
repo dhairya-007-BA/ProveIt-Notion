@@ -11,6 +11,13 @@ import { getFirestore } from "firebase-admin/firestore";
 
 const expectedFirebaseAdminProjectId =
   process.env.FIREBASE_ADMIN_PROJECT_ID ??
+  // The emulator harness supplies the public project id explicitly. Using it
+  // here keeps route handlers and the browser on the same isolated project
+  // without consulting local development environment files.
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ??
+  (process.env.FIRESTORE_EMULATOR_HOST
+    ? "proveit-test"
+    : undefined) ??
   "proveit-internal";
 
 const adminApp =

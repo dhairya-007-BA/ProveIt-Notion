@@ -63,11 +63,22 @@ export function eligibleWorkspaceUsers(users: ProveItUser[], workspaceId: string
   )).sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export function meetingParticipantNames(meeting: MeetingRecord, users: ProveItUser[]) {
+export function meetingParticipantNames(meeting: Pick<MeetingRecord, "participantIds">, users: ProveItUser[]) {
   const usersById = new Map(users.map((user) => [user.uid, user.name]));
   return meeting.participantIds.map((value) => usersById.get(value) || (value.includes(" ") ? value : "Former participant"));
 }
 
 export function meetingStatusLabel(status: MeetingStatus) {
   return status === "in_progress" ? "In progress" : status[0].toUpperCase() + status.slice(1);
+}
+
+export function validateMeetingDraft({ title, date, startTime, endTime, meetingUrl, participantIds, allowedParticipantIds }: { title: string; date: string; startTime: string; endTime: string; meetingUrl: string; participantIds: string[]; allowedParticipantIds: Set<string> }) {
+  if (!title.trim()) return "A meeting title is required.";
+  if (title.trim().length > 200) return "Meeting titles must be 200 characters or fewer.";
+  if (date && Number.isNaN(new Date(`${date}T12:00:00`).getTime())) return "Enter a valid meeting date.";
+  if ((startTime || endTime) && !date) return "Choose a meeting date before setting a time.";
+  if (startTime && endTime && endTime <= startTime) return "End time must be after the start time.";
+  if (meetingUrl.trim()) { try { new URL(meetingUrl.trim()); } catch { return "Enter a valid meeting link."; } }
+  if (new Set(participantIds).size !== participantIds.length || participantIds.some((id) => !allowedParticipantIds.has(id))) return "Choose valid workspace attendees.";
+  return null;
 }

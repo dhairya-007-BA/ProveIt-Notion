@@ -57,6 +57,9 @@ export default function DatabasesPage() {
   const [deletingId, setDeletingId] =
     useState<string | null>(null);
 
+  const [databasePendingDeletion, setDatabasePendingDeletion] =
+    useState<WorkspaceDatabase | null>(null);
+
   const [error, setError] =
     useState("");
 
@@ -263,17 +266,7 @@ export default function DatabasesPage() {
    */
   async function removeDatabase(
     databaseId: string,
-    databaseName: string
   ) {
-    const confirmed =
-      window.confirm(
-        `Delete "${databaseName}"?`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
     try {
       setDeletingId(
         databaseId
@@ -470,12 +463,7 @@ export default function DatabasesPage() {
                           deletingId ===
                           database.id
                         }
-                        onClick={() =>
-                          removeDatabase(
-                            database.id,
-                            database.name
-                          )
-                        }
+                onClick={() => setDatabasePendingDeletion(database)}
                         className="text-xs text-gray-400 transition hover:text-red-600 disabled:opacity-50"
                       >
                         {deletingId ===
@@ -504,6 +492,7 @@ export default function DatabasesPage() {
 
         </div>
       </section>
+      {databasePendingDeletion && <div role="dialog" aria-modal="true" aria-label="Delete database" className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4"><section className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 shadow-[var(--shadow-md)]"><h2 className="proveit-section-title">Delete “{databasePendingDeletion.name}”?</h2><p className="mt-2 text-sm text-[var(--muted)]">This cannot be undone.</p><div className="mt-6 flex justify-end gap-3"><button type="button" className="proveit-secondary-button" onClick={() => setDatabasePendingDeletion(null)}>Cancel</button><button type="button" className="rounded-lg bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white" onClick={() => { const database = databasePendingDeletion; setDatabasePendingDeletion(null); void removeDatabase(database.id); }}>Delete database</button></div></section></div>}
     </main>
   );
 }

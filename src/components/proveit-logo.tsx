@@ -1,6 +1,7 @@
 import Image from "next/image";
 
-import proveItLogo from "../../logo.png";
+import darkLogo from "../../Logo-DarkMode.png";
+import lightLogo from "../../Logo-LightMode.png";
 
 type ProveItLogoProps = {
   className?: string;
@@ -8,15 +9,24 @@ type ProveItLogoProps = {
 };
 
 export function ProveItLogo({
-  className = "h-8 w-8",
+  className = "h-auto w-32",
   priority = false,
 }: ProveItLogoProps) {
   return (
-    <Image
-      alt="ProveIt"
-      className={`rounded-lg object-contain ${className}`}
-      priority={priority}
-      src={proveItLogo}
-    />
+    <span className="proveit-logo">
+      <Image
+        alt="ProveIt"
+        className={`proveit-logo-light object-contain ${className}`}
+        priority={priority}
+        src={lightLogo}
+      />
+      <Image
+        alt=""
+        aria-hidden="true"
+        className={`proveit-logo-dark object-contain ${className}`}
+        priority={priority}
+        src={darkLogo}
+      />
+    </span>
   );
 }

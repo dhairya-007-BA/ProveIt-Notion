@@ -6,7 +6,7 @@ import {
   firebaseAdminProjectId,
 } from "@/lib/firebase-admin";
 import {
-  authorizeBOD,
+  authorizeCapability,
 } from "@/lib/admin-auth-core";
 import type { AdminAuthDependencies } from "@/lib/admin-auth-core";
 
@@ -32,9 +32,18 @@ export async function requireBOD(
   request: Request,
   operation = "admin-operation"
 ) {
-  return authorizeBOD(
+  return authorizeCapability(
     request,
     operation,
-    dependencies
+    dependencies,
+    "manageEmployees"
   );
+}
+
+export async function requireCapability(
+  request: Request,
+  capability: "manageEmployees" | "manageWorkspaces" | "manageGlobalSettings",
+  operation = "admin-operation"
+) {
+  return authorizeCapability(request, operation, dependencies, capability);
 }

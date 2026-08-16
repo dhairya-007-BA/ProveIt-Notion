@@ -5,10 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { deleteDoc, doc, serverTimestamp, Timestamp, updateDoc } from "firebase/firestore";
 
 import { Comments } from "@/components/comments";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { RecordContentSection, RecordProperties, RecordProperty, RecordTitle } from "@/components/record-detail-shell";
 import { db } from "@/lib/firebase";
 import { getMembershipsForWorkspace } from "@/lib/memberships";
-import { eligibleWorkspaceUsers, meetingParticipantNames, meetingStatusLabel, meetingStatuses, MeetingRecord, MeetingStatus } from "@/lib/meetings";
+import { eligibleWorkspaceUsers, meetingParticipantNames, meetingStatusLabel, meetingStatuses, MeetingRecord, MeetingStatus, validateMeetingDraft } from "@/lib/meetings";
 import { getUsers } from "@/lib/users";
 import { ProveItUser } from "@/types/user";
 
@@ -39,7 +40,7 @@ export function MeetingEditor({ meeting, currentUserId, canDelete, onDeleted, co
         const allUsers = await getUsers();
         const memberships = meeting.workspaceId === "company" ? [] : await getMembershipsForWorkspace(meeting.workspaceId);
         const eligible = eligibleWorkspaceUsers(allUsers, meeting.workspaceId, new Set(memberships.map((membership) => membership.userId)));
-        const preserved = allUsers.filter((user) => participantIds.includes(user.uid) && !eligible.some((eligibleUser) => eligibleUser.uid === user.uid));
+        const preserved = allUsers.filter((user) => meeting.participantIds.includes(user.uid) && !eligible.some((eligibleUser) => eligibleUser.uid === user.uid));
         if (!cancelled) setUsers([...eligible, ...preserved].sort((left, right) => left.name.localeCompare(right.name)));
       } catch {
         if (!cancelled) setError("Meeting participants could not be loaded.");
@@ -47,18 +48,19 @@ export function MeetingEditor({ meeting, currentUserId, canDelete, onDeleted, co
     }
     loadPeople();
     return () => { cancelled = true; };
-  }, [meeting.workspaceId, participantIds]);
+  }, [meeting.id, meeting.participantIds, meeting.workspaceId]);
 
   const participantNames = useMemo(() => meetingParticipantNames({ ...meeting, participantIds }, users), [meeting, participantIds, users]);
 
   async function save() {
     const startAt = combine(date, startTime);
     const endAt = combine(date, endTime);
-    if (startAt && endAt && endAt < startAt) { setError("End time must be after the start time."); return; }
+    const validation = validateMeetingDraft({ title, date, startTime, endTime, meetingUrl, participantIds, allowedParticipantIds: new Set(users.map((user) => user.uid)) });
+    if (validation) { setError(validation); return; }
     try {
       setSaving(true); setError("");
       await updateDoc(doc(db, "meetings", meeting.id), {
-        title: title.trim() || "Untitled meeting", notes, transcript, status, location: location.trim(), meetingUrl: meetingUrl.trim(),
+        title: title.trim(), notes, transcript, status, location: location.trim(), meetingUrl: meetingUrl.trim(),
         participantIds, organizerId: meeting.organizerId || currentUserId,
         startAt: startAt ? Timestamp.fromDate(startAt) : null, endAt: endAt ? Timestamp.fromDate(endAt) : null,
         updatedAt: serverTimestamp(),
@@ -83,10 +85,11 @@ export function MeetingEditor({ meeting, currentUserId, canDelete, onDeleted, co
       <RecordProperty label="Location or link" icon="⌁"><div className="grid gap-2 sm:grid-cols-2"><input aria-label="Meeting location" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Location" className="proveit-control px-2 py-1 text-sm" /><input aria-label="Meeting URL" type="url" value={meetingUrl} onChange={(event) => setMeetingUrl(event.target.value)} placeholder="https://" className="proveit-control px-2 py-1 text-sm" /></div></RecordProperty>
       <RecordProperty label="Organizer" icon="⚑">{users.find((user) => user.uid === meeting.organizerId)?.name || (meeting.organizerId === currentUserId ? "You" : "Former organizer")}</RecordProperty>
     </RecordProperties>
-    <RecordContentSection title="Notes" description="Add an agenda, summary, decisions, and action items."><textarea aria-label="Meeting notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Agenda\n\nNotes and decisions" className="min-h-48 w-full resize-y rounded bg-transparent px-1 py-2 text-sm leading-7 outline-none placeholder:text-[var(--subtle)] hover:bg-[var(--hover)] focus:bg-white focus-visible:ring-2 focus-visible:ring-[var(--focus)]/35" /></RecordContentSection>
-    <RecordContentSection title="Transcript" description="Paste or edit a transcript. Upload and transcription remain intentionally unconfigured."><textarea aria-label="Transcript" value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Paste or edit a transcript here…" className="min-h-48 w-full resize-y rounded bg-transparent px-1 py-2 text-sm leading-7 outline-none placeholder:text-[var(--subtle)] hover:bg-[var(--hover)] focus:bg-white focus-visible:ring-2 focus-visible:ring-[var(--focus)]/35" /></RecordContentSection>
+    <RecordContentSection title="Notes" description="Add an agenda, summary, decisions, and action items."><textarea aria-label="Meeting notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Agenda\n\nNotes and decisions" className="min-h-48 w-full resize-y rounded bg-transparent px-1 py-2 text-sm leading-7 outline-none placeholder:text-[var(--subtle)] hover:bg-[var(--hover)] focus:bg-[var(--input)] focus-visible:ring-2 focus-visible:ring-[var(--focus)]/35" /></RecordContentSection>
+    <RecordContentSection title="Transcript" description="Paste or edit a transcript. Upload and transcription remain intentionally unconfigured."><textarea aria-label="Transcript" value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Paste or edit a transcript here…" className="min-h-48 w-full resize-y rounded bg-transparent px-1 py-2 text-sm leading-7 outline-none placeholder:text-[var(--subtle)] hover:bg-[var(--hover)] focus:bg-[var(--input)] focus-visible:ring-2 focus-visible:ring-[var(--focus)]/35" /></RecordContentSection>
     {!compact && <Comments workspaceId={meeting.workspaceId} entityType="meeting" entityId={meeting.id} />}
-    {canDelete && <section className="mt-9 border-t border-[var(--border)] pt-6"><button onClick={() => setConfirmDelete(true)} className="proveit-secondary-button text-[var(--danger)]">Delete meeting</button>{confirmDelete && <div role="dialog" aria-modal="true" aria-label="Confirm meeting deletion" className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-md)]"><p className="text-sm font-medium">Delete this meeting?</p><p className="mt-1 text-sm text-[var(--muted)]">This cannot be undone. Only a BOD administrator can complete deletion.</p><div className="mt-4 flex gap-2"><button onClick={remove} disabled={saving} className="proveit-primary-button bg-[var(--danger)]">Delete meeting</button><button onClick={() => setConfirmDelete(false)} className="proveit-secondary-button">Cancel</button></div></div>}</section>}
+    {canDelete && <section className="mt-9 border-t border-[var(--border)] pt-6"><button type="button" onClick={() => setConfirmDelete(true)} className="proveit-secondary-button text-[var(--danger)]">Delete meeting</button></section>}
+    <ConfirmDialog open={confirmDelete} title="Delete meeting?" description="This will permanently delete this meeting." confirmLabel="Delete meeting" loading={saving} error={error} onCancel={() => setConfirmDelete(false)} onConfirm={() => void remove()} />
     {compact && <Link href={`/workspaces/${meeting.workspaceId}/meetings/${meeting.id}`} className="proveit-secondary-button mt-6">↗ Expand meeting</Link>}
   </div>;
 }

@@ -8,7 +8,9 @@ import EditEmployeeForm from "@/components/admin/edit-employee-form";
 import EmployeeActions from "@/components/admin/employee-actions";
 import ResetPasswordForm from "@/components/admin/reset-password-form";
 import RemoveEmployeeForm from "@/components/admin/remove-employee-form";
+import AccessPermissions from "@/components/admin/access-permissions";
 import { useAuth } from "@/components/auth-provider";
+import { BackButton } from "@/components/back-button";
 
 import { getUsers } from "@/lib/users";
 import { ProveItUser } from "@/types/user";
@@ -24,6 +26,7 @@ export default function EmployeeAdminPage() {
 
   const [users, setUsers] =
     useState<ProveItUser[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [loading, setLoading] =
     useState(true);
@@ -88,7 +91,11 @@ export default function EmployeeAdminPage() {
       return;
     }
 
-    loadUsers();
+    const timer = window.setTimeout(() => {
+      void loadUsers();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [
     authLoading,
     firebaseUser,
@@ -122,6 +129,9 @@ export default function EmployeeAdminPage() {
             restricted to BOD members.
           </p>
         </div>
+
+        <label className="sr-only" htmlFor="employee-search">Search employees</label>
+        <input id="employee-search" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search employees…" className="proveit-control mb-5 w-full max-w-md px-3 py-2 text-sm" />
       </main>
     );
   }
@@ -129,6 +139,8 @@ export default function EmployeeAdminPage() {
   return (
     <main className="min-h-screen bg-gray-50 px-8 py-10">
       <div className="mx-auto max-w-5xl">
+
+        <BackButton href="/" label="Home" />
 
         {/* HEADER */}
 
@@ -181,6 +193,7 @@ export default function EmployeeAdminPage() {
         {/* EDIT EMPLOYEE */}
 
         {editingEmployee && (
+          <>
           <EditEmployeeForm
             employee={editingEmployee}
             currentUser={firebaseUser}
@@ -193,6 +206,8 @@ export default function EmployeeAdminPage() {
               await loadUsers();
             }}
           />
+          <div className="mt-6"><AccessPermissions uid={editingEmployee.uid} /></div>
+          </>
         )}
 
         {/* RESET PASSWORD */}
@@ -239,7 +254,7 @@ export default function EmployeeAdminPage() {
               No employees found.
             </div>
           ) : (
-            users.map((user) => (
+            users.filter((user) => `${user.name} ${user.employeeId} ${user.email || ""}`.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase())).map((user) => (
               <div
                 key={user.uid}
                 className="flex items-center justify-between border-b border-gray-100 px-6 py-5 last:border-b-0"
