@@ -4,8 +4,9 @@ const { requireAccess, requireDeleteAccess, syncTask, deleteTask, config, KaneoR
   requireAccess: vi.fn(), requireDeleteAccess: vi.fn(), syncTask: vi.fn(), deleteTask: vi.fn(), config: vi.fn(),
   KaneoRouteAuthError: class KaneoRouteAuthError extends Error { constructor(message: string, public status: 401 | 403 | 404 | 503) { super(message); } },
 }));
-vi.mock("@/lib/kaneo-route-auth", () => ({ KaneoRouteAuthError, requireKaneoWorkspaceAccess: requireAccess, requireKaneoBusinessDeleteAccess: requireDeleteAccess }));
-vi.mock("@/lib/kaneo-task-update", () => ({ syncMappedBusinessTask: syncTask, deleteMappedBusinessTask: deleteTask }));
+vi.mock("@/lib/kaneo-route-auth", () => ({ KaneoRouteAuthError, requireKaneoWorkspaceAccess: requireAccess, requireKaneoWorkspaceDeleteAccess: requireDeleteAccess }));
+vi.mock("@/lib/kaneo-task-update", () => ({ syncMappedWorkspaceTask: syncTask, deleteMappedWorkspaceTask: deleteTask }));
+vi.mock("@/lib/kaneo-routing", () => ({ getKaneoProjectKeyForWorkspace: (workspaceId: string) => workspaceId }));
 vi.mock("@/lib/kaneo", () => ({ getKaneoConfig: config, KaneoError: class KaneoError extends Error { constructor(message: string, public status: number, public category: string) { super(message); } } }));
 
 import { DELETE, PATCH } from "@/app/api/integrations/kaneo/tasks/[taskId]/route";
@@ -35,7 +36,7 @@ describe("mapped Kaneo task update route", () => {
   it("passes only the ProveIt document ID and selected supported fields to the server helper", async () => {
     const response = await PATCH(request({ fields: ["title", "description", "priority"] }), context);
     expect(response.status).toBe(200);
-    expect(syncTask).toHaveBeenCalledWith("proveit-task-1", ["title", "description", "priority"], { business: "business-project", technology: "technology-project" });
+    expect(syncTask).toHaveBeenCalledWith("proveit-task-1", "business", ["title", "description", "priority"], { business: "business-project", technology: "technology-project" });
   });
 
   it("rejects cross-workspace task selection in the server helper before Kaneo is called", async () => {
@@ -49,7 +50,7 @@ describe("mapped Kaneo task update route", () => {
     expect((await DELETE(new Request("http://localhost/api/integrations/kaneo/tasks/proveit-task-1", { method: "DELETE" }), context)).status).toBe(403);
     expect(deleteTask).not.toHaveBeenCalled();
     const response = await DELETE(new Request("http://localhost/api/integrations/kaneo/tasks/proveit-task-1", { method: "DELETE", body: JSON.stringify({ kaneoTaskId: "attacker", projectId: "attacker", path: "attacker" }) }), context);
-    expect(response.status).toBe(200); expect(deleteTask).toHaveBeenCalledWith("proveit-task-1", { business: "business-project", technology: "technology-project" });
+    expect(response.status).toBe(200); expect(deleteTask).toHaveBeenCalledWith("proveit-task-1", "business", { business: "business-project", technology: "technology-project" });
   });
 
   it("returns only safe messages for upstream errors", async () => {

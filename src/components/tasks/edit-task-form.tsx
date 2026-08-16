@@ -20,7 +20,7 @@ import { getMembershipsForWorkspace } from "@/lib/memberships";
 import { useAuth } from "@/components/auth-provider";
 import CustomFieldProperties from "@/components/tasks/custom-field-properties";
 import { saveTaskCustomFields } from "@/lib/task-custom-fields";
-import { syncBusinessTaskDelete, syncBusinessTaskUpdate } from "@/lib/kaneo-business-task-update-sync";
+import { syncWorkspaceTaskDelete, syncWorkspaceTaskUpdate } from "@/lib/kaneo-business-task-update-sync";
 import { type CustomFieldValue } from "@/lib/custom-fields";
 
 import { ProveItUser } from "@/types/user";
@@ -314,7 +314,7 @@ export default function EditTaskForm({
 
       if (firebaseUser) {
         const fields = (["title", "description", "status", "priority"] as const).filter((field) => task[field] !== ({ title: cleanTitle, description: description.trim(), status, priority } as typeof task)[field]);
-        const sync = await syncBusinessTaskUpdate(firebaseUser, task.workspaceId, task.id, [...fields]);
+        const sync = await syncWorkspaceTaskUpdate(firebaseUser, task.workspaceId, task.id, [...fields]);
         if (sync && sync.state !== "synced") setError(sync.message || "Task saved, but external sync was not confirmed.");
       }
 
@@ -362,7 +362,7 @@ export default function EditTaskForm({
         task.id
       );
 
-      if (firebaseUser && !(await syncBusinessTaskDelete(firebaseUser, task.workspaceId, task.id))) {
+      if (firebaseUser && !(await syncWorkspaceTaskDelete(firebaseUser, task.workspaceId, task.id))) {
         setError("Task was not deleted because external sync failed.");
         return;
       }

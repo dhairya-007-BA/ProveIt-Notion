@@ -2,12 +2,12 @@ import type { User } from "firebase/auth";
 
 import { authenticatedRequest } from "@/lib/authenticated-request";
 
-const BUSINESS_WORKSPACE_ID = "business";
+const KANEO_WORKSPACES = new Set(["business", "technology"]);
 const SUPPORTED_PRIORITIES = new Set(["low", "medium", "high", "urgent"]);
 const AMBIGUOUS_MESSAGE =
   "Kaneo task creation outcome is ambiguous and will not be retried automatically.";
 
-export type KaneoBusinessSyncInput = {
+export type KaneoWorkspaceSyncInput = {
   title: string;
   description: string;
   priority: string | undefined;
@@ -43,13 +43,13 @@ function isAmbiguousResponse(body: unknown) {
     (body as { message?: unknown }).message === AMBIGUOUS_MESSAGE;
 }
 
-export async function syncBusinessTaskToKaneo(
+export async function syncWorkspaceTaskToKaneo(
   user: Pick<User, "getIdToken">,
   workspaceId: string,
-  input: KaneoBusinessSyncInput & { proveItTaskId?: string },
+  input: KaneoWorkspaceSyncInput & { proveItTaskId?: string },
   dependencies: Partial<SyncDependencies> = {}
 ): Promise<KaneoBusinessSyncResult> {
-  if (workspaceId !== BUSINESS_WORKSPACE_ID) return "not_applicable";
+  if (!KANEO_WORKSPACES.has(workspaceId)) return "not_applicable";
 
   const request = dependencies.request ?? defaultDependencies.request;
   const payload = {
@@ -62,7 +62,10 @@ export async function syncBusinessTaskToKaneo(
   };
 
   try {
-    const response = await request(user, "/api/integrations/kaneo/tasks", {
+    const endpoint = workspaceId === "business"
+      ? "/api/integrations/kaneo/tasks"
+      : `/api/integrations/kaneo/tasks?workspaceId=${encodeURIComponent(workspaceId)}`;
+    const response = await request(user, endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -76,20 +79,31 @@ export async function syncBusinessTaskToKaneo(
   }
 }
 
-export async function createProveItTaskThenSyncBusinessKaneo(
+export async function createProveItTaskThenSyncWorkspaceKaneo(
   createProveItTask: () => Promise<string>,
   user: Pick<User, "getIdToken">,
   workspaceId: string,
-  input: KaneoBusinessSyncInput,
+  input: KaneoWorkspaceSyncInput,
   dependencies: Partial<SyncDependencies> = {}
 ) {
   const proveItTaskId = await createProveItTask();
-  const kaneoSync = await syncBusinessTaskToKaneo(
+  const kaneoSync = await syncWorkspaceTaskToKaneo(
     user,
     workspaceId,
     { ...input, proveItTaskId },
     dependencies
   );
 
+  return { proveItTaskId, kaneoSync };
+}
+
+/** Business aliases retained for the locked reference implementation. */
+export type KaneoBusinessSyncInput = KaneoWorkspaceSyncInput;
+export async function syncBusinessTaskToKaneo(user: Pick<User, "getIdToken">, workspaceId: string, input: KaneoBusinessSyncInput & { proveItTaskId?: string }, dependencies: Partial<SyncDependencies> = {}) {
+  return workspaceId === "business" ? syncWorkspaceTaskToKaneo(user, workspaceId, input, dependencies) : "not_applicable" as const;
+}
+export async function createProveItTaskThenSyncBusinessKaneo(createProveItTask: () => Promise<string>, user: Pick<User, "getIdToken">, workspaceId: string, input: KaneoBusinessSyncInput, dependencies: Partial<SyncDependencies> = {}) {
+  const proveItTaskId = await createProveItTask();
+  const kaneoSync = await syncBusinessTaskToKaneo(user, workspaceId, { ...input, proveItTaskId }, dependencies);
   return { proveItTaskId, kaneoSync };
 }
