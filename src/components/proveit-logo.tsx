@@ -1,8 +1,5 @@
 import Image from "next/image";
 
-import darkLogo from "../../Logo-DarkMode.png";
-import lightLogo from "../../Logo-LightMode.png";
-
 type ProveItLogoProps = {
   className?: string;
   priority?: boolean;
@@ -17,15 +14,19 @@ export function ProveItLogo({
       <Image
         alt="ProveIt"
         className={`proveit-logo-light object-contain ${className}`}
+        height={200}
         priority={priority}
-        src={lightLogo}
+        src="/proveit-logo-light.png"
+        width={600}
       />
       <Image
         alt=""
         aria-hidden="true"
         className={`proveit-logo-dark object-contain ${className}`}
+        height={200}
         priority={priority}
-        src={darkLogo}
+        src="/proveit-logo-dark.png"
+        width={600}
       />
     </span>
   );
