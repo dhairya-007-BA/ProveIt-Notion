@@ -429,6 +429,7 @@ export default function EditTaskForm({
           <input
             required
             autoFocus
+            aria-label="Task title"
             value={title}
             disabled={busy}
             onChange={(event) =>
@@ -474,6 +475,7 @@ export default function EditTaskForm({
             </label>
 
             <select
+              aria-label="Task status"
               value={status}
               disabled={busy}
               onChange={(event) =>

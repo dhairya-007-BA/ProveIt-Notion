@@ -67,6 +67,25 @@ describe("mapped Business Kaneo updates", () => {
     expect(kaneoPut).toHaveBeenCalledTimes(1);
   });
 
+  it("records partial synchronization when an earlier external field update succeeded", async () => {
+    kaneoPut
+      .mockResolvedValueOnce({ id: "kaneo-task-1" })
+      .mockRejectedValueOnce(new KaneoError("hidden", 502, "upstream_4xx"));
+
+    await expect(syncMappedBusinessTask(
+      "proveit-task-1",
+      ["title", "priority"],
+      projects
+    )).resolves.toMatchObject({
+      state: "partial",
+      message: "Some external fields were updated; synchronization is incomplete.",
+    });
+    expect(kaneoPut).toHaveBeenCalledTimes(2);
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      "integration.kaneo.syncState": "partial",
+    }));
+  });
+
   it("deletes exactly the server-mapped Kaneo task once", async () => {
     await expect(deleteMappedBusinessTask("proveit-task-1", projects)).resolves.toEqual({ state: "synced" });
     expect(kaneoDelete).toHaveBeenCalledTimes(1);

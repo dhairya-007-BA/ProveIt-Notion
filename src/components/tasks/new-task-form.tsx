@@ -382,6 +382,7 @@ export default function NewTaskForm({
           <input
             required
             autoFocus
+            aria-label="Task title"
             value={title}
             onChange={(event) =>
               setTitle(
@@ -425,6 +426,7 @@ export default function NewTaskForm({
             </label>
 
             <select
+              aria-label="Task status"
               value={status}
               onChange={(event) =>
                 setStatus(

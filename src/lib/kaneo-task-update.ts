@@ -14,6 +14,7 @@ export async function syncMappedWorkspaceTask(taskId: string, workspaceId: Kaneo
   if (!snapshot.exists || task?.workspaceId !== workspaceId || !task.integration?.kaneo?.taskId) return { state: "partial" as SyncState, message: "External sync is not configured for this task." };
   if (task.integration.kaneo.projectId !== getKaneoProjectIdForWorkspace(workspaceId, projects)) throw new Error("Workspace routing is unavailable.");
   let state: SyncState = "synced";
+  let synchronizedFieldCount = 0;
   try {
     for (const field of fields) {
       if (field === "status" && task.status === "blocked") { state = "partial"; continue; }
@@ -21,10 +22,17 @@ export async function syncMappedWorkspaceTask(taskId: string, workspaceId: Kaneo
       const value = field === "status" ? statusMap[task.status] : task[field];
       if (value === undefined) continue;
       await kaneoPut(path, { [field]: value });
+      synchronizedFieldCount += 1;
     }
-  } catch (error) { state = error instanceof KaneoError && (error.category === "network" || error.category === "timeout") ? "ambiguous" : "failed"; }
+  } catch (error) {
+    state = synchronizedFieldCount > 0
+      ? "partial"
+      : error instanceof KaneoError && (error.category === "network" || error.category === "timeout")
+        ? "ambiguous"
+        : "failed";
+  }
   await ref.update({ "integration.kaneo.syncState": state, "integration.kaneo.lastSyncAt": FieldValue.serverTimestamp() });
-  return { state, message: state === "synced" ? "External sync updated." : state === "partial" ? "Status is not synced for blocked tasks." : state === "ambiguous" ? "External sync could not be confirmed." : "External sync failed." };
+  return { state, message: state === "synced" ? "External sync updated." : state === "partial" ? synchronizedFieldCount > 0 ? "Some external fields were updated; synchronization is incomplete." : "Status is not synced for blocked tasks." : state === "ambiguous" ? "External sync could not be confirmed." : "External sync failed." };
 }
 
 export async function deleteMappedWorkspaceTask(taskId: string, workspaceId: KaneoProjectKey, projects: { business: string; technology: string }) {

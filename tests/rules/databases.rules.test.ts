@@ -165,6 +165,30 @@ afterAll(async () => {
 });
 
 describe("database Firestore rules", () => {
+  it("requires documents to be created with the authenticated user as creator", async () => {
+    const member = testEnv.authenticatedContext("company-member").firestore();
+
+    await assertSucceeds(setDoc(doc(member, "documents", "self-authored-document"), {
+      workspaceId: "business",
+      title: "Authoritative document",
+      createdBy: "company-member",
+    }));
+
+    await assertFails(setDoc(doc(member, "documents", "spoofed-author-document"), {
+      workspaceId: "business",
+      title: "Spoofed document",
+      createdBy: "business-recipient",
+    }));
+
+    await assertFails(updateDoc(doc(member, "documents", "self-authored-document"), {
+      createdBy: "business-recipient",
+    }));
+
+    await assertSucceeds(updateDoc(doc(member, "documents", "self-authored-document"), {
+      title: "Updated authoritative document",
+    }));
+  });
+
   it("allows only BOD users to delete meetings", async () => {
     const member = testEnv.authenticatedContext("company-member").firestore();
     const bod = testEnv.authenticatedContext("bod-member").firestore();
@@ -265,12 +289,12 @@ describe("database Firestore rules", () => {
     }));
   });
 
-  it("allows a workspace member to create their own comment and notification", async () => {
+  it("keeps comment and notification creation server-only", async () => {
     const firestore = testEnv.authenticatedContext("company-member").firestore();
-    await assertSucceeds(setDoc(doc(firestore, "comments", "comment-1"), {
+    await assertFails(setDoc(doc(firestore, "comments", "comment-1"), {
       workspaceId: "business", entityType: "meeting", entityId: "meeting-1", authorUid: "company-member",
     }));
-    await assertSucceeds(setDoc(doc(firestore, "notifications", "notification-1"), {
+    await assertFails(setDoc(doc(firestore, "notifications", "notification-1"), {
       workspaceId: "business", recipientUid: "business-recipient", actorUid: "company-member",
       entityType: "meeting", entityId: "meeting-1",
     }));
@@ -284,13 +308,13 @@ describe("database Firestore rules", () => {
     }));
   });
 
-  it("allows members to query and reply to comments in their workspace", async () => {
+  it("allows members to query comments but keeps reply mutations server-only", async () => {
     const firestore = testEnv.authenticatedContext("company-member").firestore();
-    await assertSucceeds(setDoc(doc(firestore, "comments", "comment-parent"), {
+    await testEnv.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "comments", "comment-parent"), {
       workspaceId: "business", entityType: "meeting", entityId: "meeting-1", authorUid: "company-member",
     }));
-    await assertSucceeds(getDocs(query(collection(firestore, "comments"), where("workspaceId", "==", "business"), where("entityId", "==", "meeting-1"))));
-    await assertSucceeds(setDoc(doc(firestore, "comments", "comment-reply"), {
+    await assertSucceeds(getDocs(query(collection(firestore, "comments"), where("workspaceId", "==", "business"), where("entityType", "==", "meeting"), where("entityId", "==", "meeting-1"))));
+    await assertFails(setDoc(doc(firestore, "comments", "comment-reply"), {
       workspaceId: "business", entityType: "meeting", entityId: "meeting-1", authorUid: "company-member", parentCommentId: "comment-parent",
     }));
   });
@@ -331,6 +355,19 @@ describe("database Firestore rules", () => {
     await assertFails(getDoc(doc(other, "notifications", "notification-recipient")));
     await assertFails(getDoc(doc(inactive, "notifications", "notification-recipient")));
     await assertFails(getDoc(doc(anonymous, "notifications", "notification-recipient")));
+  });
+
+  it("revokes notification access when the recipient loses workspace access", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "notifications", "notification-revoked"), {
+        workspaceId: "business", recipientUid: "business-recipient", actorUid: "company-member", entityType: "task", entityId: "task-1", readAt: null, archivedAt: null,
+      });
+      await updateDoc(doc(firestore, "workspaceMemberships", "business_business-recipient"), { active: false });
+    });
+    const revokedRecipient = testEnv.authenticatedContext("business-recipient").firestore();
+    await assertFails(getDoc(doc(revokedRecipient, "notifications", "notification-revoked")));
+    await assertFails(updateDoc(doc(revokedRecipient, "notifications", "notification-revoked"), { readAt: new Date() }));
   });
 });
 

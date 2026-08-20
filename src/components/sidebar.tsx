@@ -10,8 +10,8 @@ import { getAccessibleWorkspaces } from "@/lib/accessible-workspaces";
 import { auth } from "@/lib/firebase";
 import type { Workspace } from "@/types/workspace";
 
-const modules = ["dashboard", "documents", "tasks", "meetings", "databases", "activity"] as const;
-const labels: Record<(typeof modules)[number], string> = { dashboard: "Dashboard", documents: "Documents", tasks: "Tasks", meetings: "Meetings", databases: "Databases", activity: "Recent activity" };
+const modules = ["dashboard", "inbox", "documents", "tasks", "meetings", "databases", "activity"] as const;
+const labels: Record<(typeof modules)[number], string> = { dashboard: "Dashboard", inbox: "Inbox", documents: "Documents", tasks: "Tasks", meetings: "Meetings", databases: "Databases", activity: "Recent activity" };
 function initials(name = "") { return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "P"; }
 function Glyph({ children }: { children: React.ReactNode }) { return <span aria-hidden className="grid h-5 w-5 place-items-center text-xs">{children}</span>; }
 

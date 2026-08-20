@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import {
@@ -347,6 +347,9 @@ export default function DatabasePage() {
   const [viewDialog, setViewDialog] = useState<"create" | "rename" | "delete" | null>(null);
   const [viewName, setViewName] = useState("");
   const [savingView, setSavingView] = useState(false);
+  const viewDialogRef = useRef<HTMLDivElement>(null);
+  const viewDialogReturnFocus = useRef<HTMLElement | null>(null);
+  const savedViewSelectRef = useRef<HTMLSelectElement>(null);
   const [pendingDeletion, setPendingDeletion] = useState<{ kind: "row"; id: string } | { kind: "property" } | null>(null);
 
   const [editingOptionId, setEditingOptionId] =
@@ -574,7 +577,8 @@ export default function DatabasePage() {
     });
     setFilters(nextFilters);
     setActiveSort(view?.sort && validIds.has(view.sort.propertyId) ? view.sort : null);
-    setVisiblePropertyIds((view?.propertyOrder || view?.visiblePropertyIds || properties.map((property) => property.id)).filter((id) => validIds.has(id)));
+    const orderedIds = view?.propertyOrder?.length ? view.propertyOrder : view?.visiblePropertyIds;
+    setVisiblePropertyIds((orderedIds || properties.map((property) => property.id)).filter((id) => validIds.has(id)));
   }
 
   function switchView(viewId: string) {
@@ -594,13 +598,42 @@ export default function DatabasePage() {
     return body;
   }
 
-  function openCreateViewDialog() { setViewName("Untitled view"); setViewDialog("create"); }
+  function openViewDialog(kind: "create" | "rename" | "delete") {
+    viewDialogReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setViewDialog(kind);
+  }
+
+  function closeViewDialog() {
+    setViewDialog(null);
+    const returnTarget = viewDialogReturnFocus.current;
+    window.requestAnimationFrame(() => (returnTarget?.isConnected ? returnTarget : savedViewSelectRef.current)?.focus());
+  }
+
+  function handleViewDialogKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape" && !savingView) {
+      event.preventDefault();
+      closeViewDialog();
+      return;
+    }
+    if (event.key !== "Tab" || !viewDialogRef.current) return;
+    const focusable = Array.from(viewDialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])"));
+    if (!focusable.length) return;
+    const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+    const nextIndex = event.shiftKey
+      ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+      : (currentIndex === focusable.length - 1 ? 0 : currentIndex + 1);
+    event.preventDefault();
+    focusable[nextIndex]?.focus();
+  }
+
+  function openCreateViewDialog() { setViewName("Untitled view"); openViewDialog("create"); }
   function openRenameViewDialog() {
     const view = views.find((candidate) => candidate.id === activeViewId);
     if (!view) return;
     setViewName(view.name);
-    setViewDialog("rename");
+    openViewDialog("rename");
   }
+  function openDeleteViewDialog() { openViewDialog("delete"); }
 
   async function submitViewDialog() {
     const name = viewName.trim();
@@ -617,15 +650,23 @@ export default function DatabasePage() {
         await requestView(`/api/workspaces/${workspaceId}/databases/${databaseId}/views/${activeViewId}`, { method: "PATCH", body: JSON.stringify({ name }) });
         setViews((current) => current.map((view) => view.id === activeViewId ? { ...view, name } : view));
       }
-      setViewDialog(null);
+      closeViewDialog();
     } catch { setError("Saved view could not be saved."); }
     finally { setSavingView(false); }
   }
 
   async function saveActiveView() {
     if (activeViewId === "default" || !database) return;
-    try { await requestView(`/api/workspaces/${workspaceId}/databases/${databaseId}/views/${activeViewId}`, { method: "PATCH", body: JSON.stringify({ state: currentViewState() }) }); }
-    catch { setError("Saved view could not be saved."); }
+    const state = currentViewState();
+    const previousView = views.find((view) => view.id === activeViewId);
+    setViews((current) => current.map((view) => view.id === activeViewId ? { ...view, ...state } : view));
+    try {
+      await requestView(`/api/workspaces/${workspaceId}/databases/${databaseId}/views/${activeViewId}`, { method: "PATCH", body: JSON.stringify({ state }) });
+    }
+    catch {
+      if (previousView) setViews((current) => current.map((view) => view.id === activeViewId ? previousView : view));
+      setError("Saved view could not be saved.");
+    }
   }
 
   async function duplicateActiveView() {
@@ -646,7 +687,7 @@ export default function DatabasePage() {
       await requestView(`/api/workspaces/${workspaceId}/databases/${databaseId}/views/${activeViewId}`, { method: "DELETE" });
       setViews((current) => current.filter((view) => view.id !== activeViewId));
       switchView("default");
-      setViewDialog(null);
+      closeViewDialog();
     } catch { setError("Saved view could not be deleted."); }
   }
 
@@ -1594,7 +1635,7 @@ export default function DatabasePage() {
 
               <div className="flex min-w-0 items-center gap-2">
                 <span className="border-b-2 border-[var(--secondary)] px-3 py-2 text-sm font-medium text-[var(--foreground)]">▦ Table</span>
-                <select aria-label="Saved view" value={activeViewId} onChange={(event) => switchView(event.target.value)} className="max-w-44 truncate rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm">
+                <select ref={savedViewSelectRef} aria-label="Saved view" value={activeViewId} onChange={(event) => switchView(event.target.value)} className="max-w-44 truncate rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm">
                   <option value="default">All records</option>
                   {views.map((view) => <option key={view.id} value={view.id}>{view.name}</option>)}
                 </select>
@@ -1613,7 +1654,7 @@ export default function DatabasePage() {
                   />
                   {searchQuery && <button type="button" aria-label="Clear search" onClick={() => setSearchQuery("")} className="ml-1 rounded px-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button>}
                 </div>
-                {activeViewId !== "default" && <><button type="button" onClick={() => void saveActiveView()} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Save view</button><button type="button" onClick={openRenameViewDialog} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Rename</button><button type="button" onClick={() => void duplicateActiveView()} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Duplicate</button><button type="button" onClick={() => setViewDialog("delete")} className="min-h-8 rounded-md px-2.5 py-1 text-xs text-[var(--danger)] hover:bg-[var(--hover)]">Delete</button></>}
+                {activeViewId !== "default" && <><button type="button" onClick={() => void saveActiveView()} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Save view</button><button type="button" onClick={openRenameViewDialog} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Rename</button><button type="button" onClick={() => void duplicateActiveView()} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Duplicate</button><button type="button" onClick={openDeleteViewDialog} className="min-h-8 rounded-md px-2.5 py-1 text-xs text-[var(--danger)] hover:bg-[var(--hover)]">Delete</button></>}
                 <button type="button" aria-expanded={propertiesOpen} onClick={() => { setPropertiesOpen((current) => !current); setFilterOpen(false); setSortOpen(false); }} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Properties</button>
                 <button type="button" aria-expanded={filterOpen} aria-haspopup="dialog" onClick={() => { setFilterOpen((current) => !current); setSortOpen(false); setPropertiesOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${filters.length ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>≡ Filter{filters.length ? ` · ${filters.length}` : ""}</button>
                 <button type="button" aria-expanded={sortOpen} aria-haspopup="dialog" onClick={() => { setSortOpen((current) => !current); setFilterOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${activeSort ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>↕ Sort</button>
@@ -2280,11 +2321,11 @@ export default function DatabasePage() {
       )}
 
       {selectedRow && <aside aria-label="Row detail pane" className="fixed inset-y-0 right-0 z-50 w-full max-w-[52vw] overflow-y-auto border-l border-[var(--border)] bg-[var(--surface-elevated)] px-6 py-5 shadow-sm"><div className="flex items-center justify-between"><button aria-label="Close row pane" onClick={() => { if (rowPaneOpenedFromParent.current) { rowPaneOpenedFromParent.current = false; router.back(); } else { router.push(`/workspaces/${workspaceId}/databases/${databaseId}`); } }} className="text-sm text-[var(--muted)]">× Close</button><Link aria-label="Expand row" href={`/workspaces/${workspaceId}/databases/${databaseId}/rows/${selectedRow.id}`} className="text-sm text-[var(--secondary)]">↗ Expand</Link></div><h2 className="proveit-heading mt-8 text-3xl font-semibold">{String(selectedRow.values.title || "Untitled")}</h2><div className="mt-6 border-y border-[var(--border)] py-2">{database.properties.filter((property) => property.type !== "title").map((property) => <div key={property.id} className="flex min-h-10 items-center"><span className="w-40 shrink-0 text-sm text-[var(--muted)]">{property.name}</span><div className="min-w-0 flex-1">{renderCell(selectedRow, property)}</div></div>)}</div><Comments workspaceId={workspaceId} entityType="database-row" entityId={`${databaseId}:${selectedRow.id}`} /></aside>}
-      {viewDialog && <div role="dialog" aria-modal="true" aria-label={viewDialog === "delete" ? "Delete saved view" : viewDialog === "rename" ? "Rename saved view" : "Create saved view"} className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4" onKeyDown={(event) => { if (event.key === "Escape" && !savingView) setViewDialog(null); }}>
+      {viewDialog && <div ref={viewDialogRef} role="dialog" aria-modal="true" aria-labelledby="saved-view-dialog-title" aria-describedby={viewDialog === "delete" ? "saved-view-dialog-description" : undefined} className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !savingView) closeViewDialog(); }} onKeyDown={handleViewDialogKeyDown}>
         <form onSubmit={(event) => { event.preventDefault(); if (viewDialog === "delete") void deleteActiveView(); else void submitViewDialog(); }} className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 shadow-[var(--shadow-md)]">
-          <h2 className="proveit-section-title">{viewDialog === "delete" ? "Delete saved view?" : viewDialog === "rename" ? "Rename saved view" : "Create saved view"}</h2>
-          {viewDialog === "delete" ? <p className="mt-2 text-sm text-[var(--muted)]">This removes only the saved table configuration. Database records remain unchanged.</p> : <label className="mt-5 block text-sm font-medium">View name<input autoFocus required maxLength={100} value={viewName} onChange={(event) => setViewName(event.target.value)} className="proveit-control mt-2 w-full px-3 py-2" /></label>}
-          <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={savingView} onClick={() => setViewDialog(null)} className="proveit-secondary-button">Cancel</button><button disabled={savingView || (viewDialog !== "delete" && !viewName.trim())} className={viewDialog === "delete" ? "rounded-lg bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white" : "proveit-primary-button"}>{savingView ? "Saving…" : viewDialog === "delete" ? "Delete view" : "Save view"}</button></div>
+          <h2 id="saved-view-dialog-title" className="proveit-section-title">{viewDialog === "delete" ? "Delete saved view" : viewDialog === "rename" ? "Rename saved view" : "Create saved view"}</h2>
+          {viewDialog === "delete" ? <p id="saved-view-dialog-description" className="mt-2 text-sm text-[var(--muted)]">This removes only the saved table configuration. Database records remain unchanged.</p> : <label className="mt-5 block text-sm font-medium">View name<input autoFocus required maxLength={100} value={viewName} onChange={(event) => setViewName(event.target.value)} className="proveit-control mt-2 w-full px-3 py-2" /></label>}
+          <div className="mt-6 flex justify-end gap-3"><button type="button" autoFocus={viewDialog === "delete"} disabled={savingView} onClick={closeViewDialog} className="proveit-secondary-button">Cancel</button><button disabled={savingView || (viewDialog !== "delete" && !viewName.trim())} className={viewDialog === "delete" ? "rounded-lg bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white" : "proveit-primary-button"}>{savingView ? "Saving…" : viewDialog === "delete" ? "Delete view" : "Save view"}</button></div>
         </form>
       </div>}
       {pendingDeletion && <div role="dialog" aria-modal="true" aria-label={pendingDeletion.kind === "row" ? "Delete row" : "Delete property"} className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4"><section className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 shadow-[var(--shadow-md)]"><h2 className="proveit-section-title">Delete {pendingDeletion.kind}?</h2><p className="mt-2 text-sm text-[var(--muted)]">This action cannot be undone.</p><div className="mt-6 flex justify-end gap-3"><button type="button" className="proveit-secondary-button" onClick={() => setPendingDeletion(null)}>Cancel</button><button type="button" className="rounded-lg bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white" onClick={() => { const pending = pendingDeletion; setPendingDeletion(null); if (pending.kind === "row") void removeRow(pending.id); else void removeProperty(); }}>Delete</button></div></section></div>}

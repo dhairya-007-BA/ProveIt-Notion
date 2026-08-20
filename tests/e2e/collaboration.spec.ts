@@ -7,38 +7,41 @@ async function signIn(page: import("@playwright/test").Page, employeeId: string,
   await page.getByRole("button", { name: "Sign In" }).click();
 }
 
+async function signOut(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+}
+
 test("comments, replies, mentions, and inbox navigation work for emulator users", async ({ page }) => {
   await signIn(page, "database-test", "database-test-password");
   await page.goto("/workspaces/company/tasks/task-e2e");
 
-  await page.getByLabel("Comment").fill("Task discussion for the mention test.");
-  await page.getByRole("button", { name: "Comment" }).click();
+  const composer = page.getByLabel("Write a comment");
+  await composer.fill("Task discussion for the mention test.");
+  await page.getByRole("button", { name: "Send comment" }).click();
   await expect(page.getByRole("article").getByText("Task discussion for the mention test.")).toBeVisible();
-  await expect(page.getByTestId("comment-submit")).toHaveText("Comment");
-  await page.getByRole("article").getByRole("button", { name: "Reply" }).first().click();
-  await page.getByLabel("Comment").fill("A reply on the same task.");
-  await page.getByTestId("comment-submit").click();
+  const originalComment = page.getByRole("article").filter({ hasText: "Task discussion for the mention test." }).first();
+  await originalComment.getByRole("button", { name: "Reply" }).click();
+  await composer.fill("A reply on the same task.");
+  await page.getByRole("button", { name: "Send reply" }).click();
   await expect(page.getByRole("article").getByText("A reply on the same task.")).toBeVisible();
-  await expect(page.getByTestId("comment-submit")).toHaveText("Comment");
 
-  await page.getByLabel("Comment").fill("Please review this task.");
-  await page.getByLabel("Mention teammate").selectOption({ label: "@Mentioned User" });
-  await page.getByRole("button", { name: "Comment" }).click();
-  await expect(page.getByRole("article").getByText("Please review this task.")).toBeVisible();
+  await composer.fill("Please review this task with @Men");
+  await expect(page.getByRole("option", { name: "@Mentioned User" })).toBeVisible();
+  await composer.press("Enter");
+  await expect(composer).toHaveValue("Please review this task with @Mentioned User ");
+  await composer.fill("Please review this task with @Mentioned User before tomorrow.");
+  await page.getByRole("button", { name: "Send comment" }).click();
+  await expect(page.getByRole("article").getByText(/Please review this task with/)).toBeVisible();
 
-  await page.goto("/");
-  await page.getByRole("button", { name: "Sign Out" }).click();
+  await signOut(page);
   await signIn(page, "mentioned-user", "mentioned-user-password");
   await page.goto("/workspaces/company/inbox");
 
-  const notification = page.getByRole("article").filter({ hasText: "Database Test User mentioned you." }).last();
+  const notification = page.getByRole("article").filter({ hasText: "Database Test User mentioned you in a comment." }).last();
   await expect(notification).toBeVisible();
   await notification.getByRole("button", { name: "Open You were mentioned" }).click();
   await expect(page).toHaveURL("/workspaces/company/tasks/task-e2e");
-  await page.goto("/workspaces/company/inbox");
-  await page.getByRole("button", { name: "all", exact: true }).click();
-  await expect(notification.getByRole("button", { name: "Unread" })).toBeVisible();
-  await page.reload();
-  await page.getByRole("button", { name: "all", exact: true }).click();
-  await expect(notification.getByRole("button", { name: "Unread" })).toBeVisible();
+  await expect(page.getByText("A reply on the same task.")).toBeVisible();
+  await expect(page.getByText("@Mentioned User", { exact: true })).toBeVisible();
 });

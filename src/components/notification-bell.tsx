@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
 import { db } from "@/lib/firebase";
+import { getAccessibleWorkspaces } from "@/lib/accessible-workspaces";
 
 type NotificationItem = {
   id: string;
@@ -28,7 +29,7 @@ function destination(item: NotificationItem) {
 }
 
 export function NotificationBell() {
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, profile } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -36,21 +37,34 @@ export function NotificationBell() {
   const [items, setItems] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
-    if (!firebaseUser) return;
-    return onSnapshot(query(collection(db, "notifications"), where("recipientUid", "==", firebaseUser.uid)), (snapshot) => {
-      setItems(snapshot.docs.map((item) => ({
-        id: item.id,
-        workspaceId: typeof item.data().workspaceId === "string" ? item.data().workspaceId : "",
-        title: typeof item.data().title === "string" ? item.data().title : "Notification",
-        message: typeof item.data().message === "string" ? item.data().message : "",
-        entityType: typeof item.data().entityType === "string" ? item.data().entityType : "",
-        entityId: typeof item.data().entityId === "string" ? item.data().entityId : "",
-        readAt: item.data().readAt?.toDate?.() ?? null,
-        archivedAt: item.data().archivedAt?.toDate?.() ?? null,
-        createdAt: item.data().createdAt?.toDate?.() ?? null,
-      })).filter((item) => !item.archivedAt).sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0)));
-    }, () => setItems([]));
-  }, [firebaseUser]);
+    if (!firebaseUser || !profile) return;
+    let active = true;
+    const unsubscribes: (() => void)[] = [];
+    void getAccessibleWorkspaces(profile).then((workspaces) => {
+      if (!active) return;
+      setItems([]);
+      const ids = workspaces.map((workspace) => workspace.id);
+      for (let index = 0; index < ids.length; index += 30) {
+        const workspaceIds = ids.slice(index, index + 30);
+        const workspaceSet = new Set(workspaceIds);
+        unsubscribes.push(onSnapshot(query(collection(db, "notifications"), where("recipientUid", "==", firebaseUser.uid), where("workspaceId", "in", workspaceIds)), (snapshot) => {
+          const next = snapshot.docs.map((item) => ({
+            id: item.id,
+            workspaceId: typeof item.data().workspaceId === "string" ? item.data().workspaceId : "",
+            title: typeof item.data().title === "string" ? item.data().title : "Notification",
+            message: typeof item.data().message === "string" ? item.data().message : "",
+            entityType: typeof item.data().entityType === "string" ? item.data().entityType : "",
+            entityId: typeof item.data().entityId === "string" ? item.data().entityId : "",
+            readAt: item.data().readAt?.toDate?.() ?? null,
+            archivedAt: item.data().archivedAt?.toDate?.() ?? null,
+            createdAt: item.data().createdAt?.toDate?.() ?? null,
+          })).filter((item) => !item.archivedAt);
+          setItems((current) => [...current.filter((item) => !workspaceSet.has(item.workspaceId)), ...next].sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0)));
+        }));
+      }
+    }).catch(() => { if (active) setItems([]); });
+    return () => { active = false; unsubscribes.forEach((unsubscribe) => unsubscribe()); };
+  }, [firebaseUser, profile]);
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) { if (event.key === "Escape") setOpen(false); }

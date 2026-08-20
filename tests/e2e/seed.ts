@@ -37,14 +37,14 @@ async function clearCollaborationFixtures() {
     .where("workspaceId", "==", "company")
     .where("entityId", "==", "task-e2e")
     .get();
-  const notifications = await firestore
+  const notificationSnapshots = await Promise.all(["mentioned-user", userId].map((recipientUid) => firestore
     .collection("notifications")
-    .where("recipientUid", "==", "mentioned-user")
-    .get();
+    .where("recipientUid", "==", recipientUid)
+    .get()));
   const batch = firestore.batch();
   comments.docs.forEach((comment) => batch.delete(comment.ref));
-  notifications.docs.forEach((notification) => batch.delete(notification.ref));
-  if (!comments.empty || !notifications.empty) await batch.commit();
+  notificationSnapshots.flatMap((snapshot) => snapshot.docs).forEach((notification) => batch.delete(notification.ref));
+  if (!comments.empty || notificationSnapshots.some((snapshot) => !snapshot.empty)) await batch.commit();
 }
 
 async function clearDatabaseRows() {

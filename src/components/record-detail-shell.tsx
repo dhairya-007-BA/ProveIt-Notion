@@ -2,9 +2,10 @@
 
 import { ReactNode } from "react";
 import { BackButton } from "@/components/back-button";
+import Sidebar from "@/components/sidebar";
 
 export function RecordDetailShell({ backHref, backLabel, actions, children }: { backHref: string; backLabel: string; actions?: ReactNode; children: ReactNode }) {
-  return <main className="min-h-screen bg-[var(--background)]"><section className="proveit-content"><div className="mx-auto max-w-[54rem]"><header className="flex min-h-10 items-center justify-between border-b border-[var(--border)] pb-3"><BackButton href={backHref} label={backLabel} />{actions && <div className="flex items-center gap-2">{actions}</div>}</header>{children}</div></section></main>;
+  return <main className="flex min-h-screen bg-[var(--background)]"><Sidebar /><section className="proveit-content"><div className="mx-auto max-w-[54rem]"><header className="flex min-h-10 items-center justify-between border-b border-[var(--border)] pb-3"><BackButton href={backHref} label={backLabel} />{actions && <div className="flex items-center gap-2">{actions}</div>}</header>{children}</div></section></main>;
 }
 
 export function RecordTitle({ value, onChange, onBlur, placeholder = "Untitled", ariaLabel }: { value: string; onChange: (value: string) => void; onBlur?: (value: string) => void; placeholder?: string; ariaLabel: string }) {

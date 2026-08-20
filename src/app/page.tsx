@@ -13,6 +13,11 @@ import { Workspace } from "@/types/workspace";
 
 type HomeTask = { id: string; workspaceId: string; title: string; priority: string; status: string; dueDate?: Date };
 type HomeActivity = { id: string; workspaceId: string; description: string; userName?: string; createdAt?: Date };
+const FIRESTORE_IN_QUERY_LIMIT = 30;
+
+function chunks<T>(items: T[], size: number) {
+  return Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));
+}
 
 export default function Home() {
   const router = useRouter();
@@ -30,16 +35,19 @@ export default function Home() {
     const unsubs: (() => void)[] = [];
     void getAccessibleWorkspaces(profile).then((accessible) => {
       if (!active) return;
+      setTasks([]);
+      setActivity([]);
       setWorkspaces(accessible);
       if (!accessible.length) { setDashboardLoading(false); return; }
-      for (const workspace of accessible) {
-        unsubs.push(onSnapshot(query(collection(db, "tasks"), where("workspaceId", "==", workspace.id)), (snapshot) => {
+      for (const workspaceIds of chunks(accessible.map((workspace) => workspace.id), FIRESTORE_IN_QUERY_LIMIT)) {
+        const workspaceIdSet = new Set(workspaceIds);
+        unsubs.push(onSnapshot(query(collection(db, "tasks"), where("workspaceId", "in", workspaceIds)), (snapshot) => {
           if (!active) return;
-          setTasks((current) => [...current.filter((task) => task.workspaceId !== workspace.id), ...snapshot.docs.filter((item) => item.data().archived !== true).map((item) => ({ id: item.id, workspaceId: workspace.id, title: item.data().title || "Untitled task", priority: item.data().priority || "medium", status: item.data().status || "todo", dueDate: item.data().dueDate?.toDate() }))]);
+          setTasks((current) => [...current.filter((task) => !workspaceIdSet.has(task.workspaceId)), ...snapshot.docs.filter((item) => item.data().archived !== true).map((item) => ({ id: item.id, workspaceId: item.data().workspaceId, title: item.data().title || "Untitled task", priority: item.data().priority || "medium", status: item.data().status || "todo", dueDate: item.data().dueDate?.toDate() }))]);
         }));
-        unsubs.push(onSnapshot(query(collection(db, "activity"), where("workspaceId", "==", workspace.id)), (snapshot) => {
+        unsubs.push(onSnapshot(query(collection(db, "activity"), where("workspaceId", "in", workspaceIds)), (snapshot) => {
           if (!active) return;
-          setActivity((current) => [...current.filter((event) => event.workspaceId !== workspace.id), ...snapshot.docs.map((item) => ({ id: item.id, workspaceId: workspace.id, description: item.data().description || "Updated workspace", userName: item.data().userName || undefined, createdAt: item.data().createdAt?.toDate() }))]);
+          setActivity((current) => [...current.filter((event) => !workspaceIdSet.has(event.workspaceId)), ...snapshot.docs.map((item) => ({ id: item.id, workspaceId: item.data().workspaceId, description: item.data().description || "Updated workspace", userName: item.data().userName || undefined, createdAt: item.data().createdAt?.toDate() }))]);
         }));
       }
       setDashboardLoading(false);

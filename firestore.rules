@@ -257,55 +257,6 @@ service cloud.firestore {
         && request.resource.data.type == "table";
       allow delete: if canAccessDatabase(resource.data.databaseId);
     }
-// =========================================
-// DOCUMENTS
-// =========================================
-
-match /documents/{documentId} {
-
-  /*
-   * Employees may read documents only
-   * from workspaces they are allowed
-   * to access.
-   */
-  allow read: if
-    canAccessWorkspace(
-      resource.data.workspaceId
-    );
-
-  /*
-   * Employees may create documents only
-   * inside workspaces they can access.
-   */
-  allow create: if
-    canAccessWorkspace(
-      request.resource.data.workspaceId
-    );
-
-  /*
-   * A document may only be updated when
-   * the employee can access both the
-   * existing workspace and the proposed
-   * workspace.
-   *
-   * This prevents moving a document into
-   * or out of an unauthorized workspace.
-   */
-  allow update: if
-    canAccessWorkspace(
-      resource.data.workspaceId
-    )
-    &&
-    canAccessWorkspace(
-      request.resource.data.workspaceId
-    );
-
-  /*
-   * Permanent deletion is restricted
-   * to BOD administrators.
-   */
-  allow delete: if isBOD();
-}
     // =========================================
     // TASKS
     // =========================================
@@ -418,7 +369,10 @@ match /documents/{documentId} {
         &&
         canAccessWorkspace(
           request.resource.data.workspaceId
-        );
+        )
+        &&
+        request.resource.data.createdBy
+          == resource.data.createdBy;
 
       /*
        * Permanent deletion remains an
@@ -448,38 +402,26 @@ match /documents/{documentId} {
     match /comments/{commentId} {
       allow read: if resource.data.keys().hasAll(["workspaceId"])
         && canAccessWorkspace(resource.data.workspaceId);
-      allow create: if request.resource.data.keys().hasAll(["workspaceId", "authorUid", "entityType", "entityId"])
-        && canAccessWorkspace(request.resource.data.workspaceId)
-        && request.resource.data.authorUid == request.auth.uid
-        // Task discussion mutations use protected server routes so identity,
-        // timestamps, and task/workspace association cannot be spoofed.
-        && request.resource.data.entityType != "task";
-      allow update: if resource.data.keys().hasAll(["workspaceId", "authorUid"])
-        && canAccessWorkspace(resource.data.workspaceId)
-        && resource.data.authorUid == request.auth.uid
-        && request.resource.data.workspaceId == resource.data.workspaceId
-        && request.resource.data.authorUid == resource.data.authorUid
-        && resource.data.entityType != "task";
-      allow delete: if resource.data.keys().hasAll(["workspaceId", "authorUid"])
-        && canAccessWorkspace(resource.data.workspaceId)
-        && resource.data.authorUid == request.auth.uid
-        && resource.data.entityType != "task";
+      // Comments, replies, mentions, and notification fan-out are validated
+      // atomically by server routes. Client writes cannot forge an entity,
+      // author, parent relationship, or recipient.
+      allow create, update, delete: if false;
     }
 
     match /notifications/{notificationId} {
       allow read: if activeUser()
         && resource.data.keys().hasAll(["recipientUid"])
-        && resource.data.recipientUid == request.auth.uid;
-      allow create: if request.resource.data.keys().hasAll(["workspaceId", "recipientUid", "actorUid", "entityType", "entityId"])
-        && canAccessWorkspace(request.resource.data.workspaceId)
-        && request.resource.data.actorUid == request.auth.uid
-        && canUserAccessWorkspace(
-          request.resource.data.recipientUid,
-          request.resource.data.workspaceId
-        );
+        && resource.data.recipientUid == request.auth.uid
+        && resource.data.keys().hasAll(["workspaceId"])
+        && canAccessWorkspace(resource.data.workspaceId);
+      // Notifications are canonical server-created records. Clients may only
+      // update their own read/archive state and cannot choose recipients.
+      allow create: if false;
       allow update: if activeUser()
         && resource.data.keys().hasAll(["recipientUid"])
         && resource.data.recipientUid == request.auth.uid
+        && resource.data.keys().hasAll(["workspaceId"])
+        && canAccessWorkspace(resource.data.workspaceId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readAt", "archivedAt"]);
       allow delete: if false;
     }
