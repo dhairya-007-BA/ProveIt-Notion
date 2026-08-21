@@ -3,7 +3,6 @@ import {
   doc,
   getDocs,
   query,
-  writeBatch,
   serverTimestamp,
   Timestamp,
   updateDoc,
@@ -32,123 +31,6 @@ export interface CreateTaskInput {
   dueDate?: Date | null;
 
   createdBy: string;
-}
-export async function createTask(
-  input: CreateTaskInput
-) {
-  const batch =
-    writeBatch(db);
-
-  const taskRef =
-    doc(
-      collection(
-        db,
-        "tasks"
-      )
-    );
-
-  const activityRef =
-    doc(
-      collection(db, "activity")
-    );
-
-  batch.set(
-    taskRef,
-    {
-      title:
-        input.title.trim(),
-
-      description:
-        input.description?.trim() ||
-        "",
-
-      workspaceId:
-        input.workspaceId,
-
-      status:
-        input.status,
-
-      priority:
-        input.priority,
-
-      assigneeId:
-        input.assigneeId ??
-        null,
-
-      dueDate:
-        input.dueDate
-          ? Timestamp.fromDate(
-              input.dueDate
-            )
-          : null,
-
-      createdBy:
-        input.createdBy,
-
-      createdAt:
-        serverTimestamp(),
-
-      updatedAt:
-        serverTimestamp(),
-
-      source:
-        "proveit",
-
-      archived:
-        false,
-    }
-  );
-
-  batch.set(
-    activityRef,
-    {
-      workspaceId:
-        input.workspaceId,
-
-      entityType:
-        "task",
-
-      entityId:
-        taskRef.id,
-
-      action:
-        "created",
-
-      userId:
-        input.createdBy,
-
-      description:
-        `Created task "${input.title.trim()}"`,
-
-      previousValue:
-        null,
-
-      newValue: {
-        title:
-          input.title.trim(),
-
-        status:
-          input.status,
-
-        priority:
-          input.priority,
-
-        assigneeId:
-          input.assigneeId ??
-          null,
-      },
-
-      source:
-        "proveit",
-
-      createdAt:
-        serverTimestamp(),
-    }
-  );
-
-  await batch.commit();
-
-  return taskRef.id;
 }
 export interface UpdateTaskInput {
   title?: string;
@@ -221,6 +103,17 @@ function convertTask(
 
     meetingId:
       data.meetingId,
+
+    provenance: data.provenance && typeof data.provenance === "object"
+      ? {
+          type: data.provenance.type,
+          meetingId: data.provenance.meetingId,
+          proposalId: data.provenance.proposalId,
+          sourceTitle: data.provenance.sourceTitle,
+          approvedBy: data.provenance.approvedBy,
+          approvedAt: data.provenance.approvedAt?.toDate(),
+        }
+      : undefined,
 
     customerId:
       data.customerId,

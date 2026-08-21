@@ -375,12 +375,10 @@ export default function DocumentsPage() {
             {visibleDocuments.length === 0 ? (
               <div className="px-6 py-16 text-center">
 
-                <div className="text-4xl">
-                  <span aria-hidden>▤</span>
-                </div>
+                <div className="mx-auto grid h-10 w-10 place-items-center text-[var(--brand-primary)]"><DocumentIcon /></div>
 
                 <h2 className="mt-4 font-semibold">
-                  No documents yet
+                  {searchQuery.trim() ? "No matching documents" : "No documents yet"}
                 </h2>
 
                 <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
@@ -393,7 +391,7 @@ export default function DocumentsPage() {
                 (document) => (
                   <div
                     key={document.id}
-                    className="proveit-list-row flex items-center justify-between border-b border-[var(--border)] px-6 py-5 last:border-b-0"
+                    className="proveit-list-row flex flex-col gap-3 border-b border-[var(--border)] px-4 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5"
                   >
 
                     {/* DOCUMENT LINK */}
@@ -403,8 +401,8 @@ export default function DocumentsPage() {
                       className="flex min-w-0 flex-1 items-center gap-4"
                     >
 
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--sidebar)]">
-                        <span aria-hidden>▤</span>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--info-soft)] text-[var(--info)]">
+                        <DocumentIcon />
                       </div>
 
                       <div className="min-w-0">
@@ -425,7 +423,7 @@ export default function DocumentsPage() {
 
                     {/* ACTIONS */}
 
-                    <div className="ml-6 flex items-center gap-4">
+                    <div className="flex w-full items-center justify-end gap-3 sm:ml-6 sm:w-auto">
 
                       <button
                         type="button"
@@ -434,19 +432,22 @@ export default function DocumentsPage() {
                           document.id
                         }
                         onClick={() => setPendingDeletion(document)}
-                        className="rounded-md px-3 py-2 text-sm text-[var(--muted)] transition hover:bg-[var(--status-danger-bg)] hover:text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`Delete ${document.title}`}
+                        title="Delete document"
+                        className="grid h-10 w-10 place-items-center rounded-md text-[var(--muted)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {deletingId ===
                         document.id
-                          ? "Deleting..."
-                          : "Delete"}
+                          ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"><span className="sr-only">Deleting</span></span>
+                          : <TrashIcon />}
                       </button>
 
                       <Link
                         href={`/workspaces/${workspaceId}/documents/${document.id}`}
-                        className="text-sm text-[var(--subtle)] transition hover:text-[var(--secondary)]"
+                        aria-label={`Open ${document.title}`}
+                        className="grid min-h-10 min-w-10 place-items-center rounded-md text-sm text-[var(--subtle)] transition hover:bg-[var(--hover)] hover:text-[var(--secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
                       >
-                        →
+                        <ArrowIcon />
                       </Link>
 
                     </div>
@@ -464,3 +465,7 @@ export default function DocumentsPage() {
     </main>
   );
 }
+
+function DocumentIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-[1.8]"><path d="M6.5 3.5h8l3 3v14h-11zM14.5 3.5v3h3M9.5 11h5M9.5 15h5" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
+function TrashIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-[1.8]"><path d="M5 7h14M9 7V4.5h6V7m2 0-.7 13h-8.6L7 7m3.5 4v5.5m3-5.5v5.5" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
+function ArrowIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2"><path d="M5 12h13m-5-5 5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>; }

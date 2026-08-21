@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import {
@@ -9,11 +9,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 
 import Sidebar from "@/components/sidebar";
@@ -21,6 +23,9 @@ import { useAuth } from "@/components/auth-provider";
 import { db } from "@/lib/firebase";
 import { Comments } from "@/components/comments";
 import { authenticatedRequest } from "@/lib/authenticated-request";
+import { SideSheet as SharedSideSheet } from "@/components/ui/side-sheet";
+
+function SideSheet(props: ComponentProps<typeof SharedSideSheet>) { return <SharedSideSheet closeLabel="Close row pane" {...props} />; }
 
 type PropertyType =
   | "title"
@@ -554,11 +559,18 @@ export default function DatabasePage() {
       try {
         const response = await authenticatedRequest(user, `/api/workspaces/${workspaceId}/databases/${databaseId}/views`);
         const body = await response.json().catch(() => null) as { views?: DatabaseView[]; message?: string; code?: string } | null;
-        if (!response.ok || !body || !Array.isArray(body.views)) {
-          console.info("Saved views request failed", { status: response.status, code: typeof body?.code === "string" ? body.code : "database_views_invalid_response" });
-          throw new Error("saved-view-load");
+        let loadedViews: DatabaseView[];
+        if (response.ok && body && Array.isArray(body.views)) loadedViews = body.views;
+        else {
+          console.info("Saved views server request failed; using the rules-protected client read", { status: response.status, code: typeof body?.code === "string" ? body.code : "database_views_invalid_response" });
+          const snapshot = await getDocs(query(collection(db, "databaseViews"), where("databaseId", "==", databaseId)));
+          loadedViews = snapshot.docs.flatMap((item) => {
+            const data = item.data();
+            if (data.workspaceId !== workspaceId || data.type !== "table") return [];
+            return [{ id: item.id, name: typeof data.name === "string" ? data.name : "Untitled view", databaseId, workspaceId, type: "table" as const, filters: Array.isArray(data.filters) ? data.filters : [], sort: data.sort || null, visiblePropertyIds: Array.isArray(data.visiblePropertyIds) ? data.visiblePropertyIds : [], propertyOrder: Array.isArray(data.propertyOrder) ? data.propertyOrder : [], createdBy: typeof data.createdBy === "string" ? data.createdBy : "" }];
+          }).sort((left, right) => left.name.localeCompare(right.name));
         }
-        if (!cancelled) setViews(body.views);
+        if (!cancelled) { setViews(loadedViews); setError((current) => current === "Saved views could not be loaded." ? "" : current); }
       } catch {
         if (!cancelled) setError("Saved views could not be loaded.");
       }
@@ -1560,6 +1572,10 @@ export default function DatabasePage() {
   }
 
   const selectedRow = rows.find((row) => row.id === searchParams.get("row")) ?? null;
+  function closeRowPane() {
+    if (rowPaneOpenedFromParent.current) { rowPaneOpenedFromParent.current = false; router.back(); }
+    else router.push(`/workspaces/${workspaceId}/databases/${databaseId}`);
+  }
 
   /*
    * Main UI
@@ -1599,9 +1615,7 @@ export default function DatabasePage() {
 
             <div className="mb-7">
 
-              <div className="mb-3 text-4xl text-[var(--secondary)]">
-                ▦
-              </div>
+              <div className="mb-3 grid h-11 w-11 place-items-center rounded-xl bg-[var(--info-soft)] text-sm font-semibold text-[var(--info)]">DB</div>
 
               <input
                 value={database.name}
@@ -1634,7 +1648,7 @@ export default function DatabasePage() {
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)]">
 
               <div className="flex min-w-0 items-center gap-2">
-                <span className="border-b-2 border-[var(--secondary)] px-3 py-2 text-sm font-medium text-[var(--foreground)]">▦ Table</span>
+                <span className="border-b-2 border-[var(--secondary)] px-3 py-2 text-sm font-medium text-[var(--foreground)]">Table</span>
                 <select ref={savedViewSelectRef} aria-label="Saved view" value={activeViewId} onChange={(event) => switchView(event.target.value)} className="max-w-44 truncate rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm">
                   <option value="default">All records</option>
                   {views.map((view) => <option key={view.id} value={view.id}>{view.name}</option>)}
@@ -1644,7 +1658,7 @@ export default function DatabasePage() {
 
               <div className="relative flex flex-wrap items-center gap-2 pb-1">
                 <div className="flex h-8 items-center rounded-md border border-[var(--border)] bg-[var(--input)] px-2 shadow-sm focus-within:border-[var(--focus)] focus-within:ring-2 focus-within:ring-[var(--focus)]/20">
-                  <span aria-hidden className="mr-1 text-xs text-[var(--subtle)]">⌕</span>
+                  <svg aria-hidden="true" viewBox="0 0 24 24" className="mr-1 h-4 w-4 fill-none stroke-[var(--subtle)] stroke-[1.8]"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" strokeLinecap="round" /></svg>
                   <input
                     aria-label="Search rows"
                     value={searchQuery}
@@ -1656,8 +1670,8 @@ export default function DatabasePage() {
                 </div>
                 {activeViewId !== "default" && <><button type="button" onClick={() => void saveActiveView()} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Save view</button><button type="button" onClick={openRenameViewDialog} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Rename</button><button type="button" onClick={() => void duplicateActiveView()} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Duplicate</button><button type="button" onClick={openDeleteViewDialog} className="min-h-8 rounded-md px-2.5 py-1 text-xs text-[var(--danger)] hover:bg-[var(--hover)]">Delete</button></>}
                 <button type="button" aria-expanded={propertiesOpen} onClick={() => { setPropertiesOpen((current) => !current); setFilterOpen(false); setSortOpen(false); }} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">Properties</button>
-                <button type="button" aria-expanded={filterOpen} aria-haspopup="dialog" onClick={() => { setFilterOpen((current) => !current); setSortOpen(false); setPropertiesOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${filters.length ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>≡ Filter{filters.length ? ` · ${filters.length}` : ""}</button>
-                <button type="button" aria-expanded={sortOpen} aria-haspopup="dialog" onClick={() => { setSortOpen((current) => !current); setFilterOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${activeSort ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>↕ Sort</button>
+                <button type="button" aria-expanded={filterOpen} aria-haspopup="dialog" onClick={() => { setFilterOpen((current) => !current); setSortOpen(false); setPropertiesOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${filters.length ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>Filter{filters.length ? ` · ${filters.length}` : ""}</button>
+                <button type="button" aria-expanded={sortOpen} aria-haspopup="dialog" onClick={() => { setSortOpen((current) => !current); setFilterOpen(false); }} className={`rounded-md border px-2.5 py-1.5 text-sm transition ${activeSort ? "border-[var(--focus)] bg-[var(--selected)] text-[var(--foreground)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"}`}>Sort</button>
                 {propertiesOpen && <div role="dialog" aria-label="Properties" className="absolute right-0 top-10 z-20 w-64 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Properties</p><button type="button" aria-label="Close properties menu" onClick={() => setPropertiesOpen(false)}>×</button></div><p className="mt-1 text-xs text-[var(--muted)]">Hidden properties remain filterable and editable from row details; table search uses visible text properties.</p><div className="mt-3 space-y-2">{database.properties.map((property) => <label key={property.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={visibleProperties.some((candidate) => candidate.id === property.id)} onChange={(event) => setVisiblePropertyIds((current) => { const ids = current.length ? current : database.properties.map((candidate) => candidate.id); return event.target.checked ? [...ids, property.id] : ids.filter((id) => id !== property.id); })} />{property.name}</label>)}</div></div>}
                 {filterOpen && <div role="dialog" aria-label="Filter rows" className="absolute right-0 top-10 z-20 w-[min(28rem,calc(100vw-2rem))] rounded-lg border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Filter rows</p><button type="button" aria-label="Close filter menu" onClick={() => setFilterOpen(false)} className="rounded px-1 text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button></div><div className="mt-3 space-y-3">{filters.map((filter) => { const property = database.properties.find((candidate) => candidate.id === filter.propertyId) || database.properties[0]; const operators = filterOperators(property.type); const configuredOptionIds = new Set((property.options || []).map((option) => option.id)); const legacyValues = Array.from(new Set(rows.map((row) => row.values[property.id]).filter((value): value is string => typeof value === "string" && value !== "" && !configuredOptionIds.has(value)))); return <div key={filter.id} data-testid="filter-row" className="rounded-lg border border-[var(--border)] bg-[#fafaf9] p-2"><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"><select aria-label="Filter property" value={filter.propertyId} onChange={(event) => { const nextProperty = database.properties.find((candidate) => candidate.id === event.target.value); if (nextProperty) updateFilter(filter.id, { propertyId: nextProperty.id, operator: filterOperators(nextProperty.type)[0].value, value: undefined }); }} className="proveit-control min-w-0 px-2 py-2 text-sm">{database.properties.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select><select aria-label="Filter operator" value={filter.operator} onChange={(event) => updateFilter(filter.id, { operator: event.target.value as FilterOperator, value: operatorNeedsValue(event.target.value as FilterOperator) ? filter.value : undefined })} className="proveit-control min-w-0 px-2 py-2 text-sm">{operators.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}</select>{operatorNeedsValue(filter.operator) && (property.type === "select" ? <select aria-label="Filter value" value={filter.value || ""} onChange={(event) => updateFilter(filter.id, { value: event.target.value })} className="proveit-control min-w-0 px-2 py-2 text-sm"><option value="">Choose…</option>{(property.options || []).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}{legacyValues.map((value) => <option key={value} value={value}>{`Legacy: ${value}`}</option>)}</select> : <input aria-label="Filter value" type={property.type === "number" ? "number" : property.type === "date" ? "date" : "text"} value={filter.value || ""} onChange={(event) => updateFilter(filter.id, { value: event.target.value })} placeholder="Value" className="proveit-control min-w-0 px-2 py-2 text-sm" />)}{!operatorNeedsValue(filter.operator) && <span className="hidden sm:block" />}<button type="button" aria-label="Remove filter" onClick={() => setFilters((current) => current.filter((candidate) => candidate.id !== filter.id))} className="rounded-md px-2 text-sm text-[var(--subtle)] hover:bg-red-50 hover:text-[var(--danger)]">×</button></div></div>; })}</div><div className="mt-4 flex items-center justify-between gap-2"><button type="button" onClick={addFilter} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs">+ Add filter</button><div className="flex gap-2"><button type="button" onClick={() => setFilters([])} disabled={!filters.length} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">Clear all</button><button type="button" onClick={() => setFilterOpen(false)} className="proveit-primary-button min-h-8 px-2.5 py-1 text-xs">Done</button></div></div></div>}
                 {sortOpen && <div role="dialog" aria-label="Sort rows" className="absolute right-0 top-10 z-20 w-72 rounded-lg border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-md)]"><div className="flex items-center justify-between"><p className="text-sm font-medium">Sort rows</p><button type="button" aria-label="Close sort menu" onClick={() => setSortOpen(false)} className="rounded px-1 text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]">×</button></div><label className="mt-3 block text-xs font-medium text-[var(--muted)]">Property<select aria-label="Sort property" value={activeSort?.propertyId || ""} onChange={(event) => { const propertyId = event.target.value; setActiveSort(propertyId ? { propertyId, direction: activeSort?.direction || "asc" } : null); }} className="proveit-control mt-1.5 w-full px-2.5 py-2 text-sm"><option value="">Choose a property</option>{database.properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}</select></label>{activeSort && (() => { const property = database.properties.find((candidate) => candidate.id === activeSort.propertyId); return property ? <label className="mt-3 block text-xs font-medium text-[var(--muted)]">Direction<select aria-label="Sort direction" value={activeSort.direction} onChange={(event) => setActiveSort({ ...activeSort, direction: event.target.value as SortDirection })} className="proveit-control mt-1.5 w-full px-2.5 py-2 text-sm"><option value="asc">{directionLabel(property.type, "asc")}</option><option value="desc">{directionLabel(property.type, "desc")}</option></select></label> : null; })()}<div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setActiveSort(null)} disabled={!activeSort} className="proveit-secondary-button min-h-8 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50">Clear sort</button><button type="button" onClick={() => setSortOpen(false)} className="proveit-primary-button min-h-8 px-2.5 py-1 text-xs">Done</button></div></div>}
@@ -1798,10 +1812,11 @@ export default function DatabasePage() {
                                   <Link
                                     href={`/workspaces/${workspaceId}/databases/${databaseId}?row=${row.id}`}
                                     onClick={() => { rowPaneOpenedFromParent.current = true; }}
-                                    className="mr-2 rounded px-2 py-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)]"
-                                    title="Open row"
+                                    aria-label={`Open ${String(row.values.title || "Untitled row")}`}
+                                    className="mr-2 grid h-9 w-9 place-items-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+                                    title="Open row details"
                                   >
-                                    ↗
+                                    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2"><path d="M14 5h5v5M19 5l-8 8M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                                   </Link>
 
                                 </div>
@@ -1825,9 +1840,11 @@ export default function DatabasePage() {
                           <button
                             type="button"
                             onClick={() => setPendingDeletion({ kind: "row", id: row.id })}
-                            className="px-3 text-xs text-[var(--subtle)] opacity-0 transition hover:text-[var(--danger)] group-hover:opacity-100"
+                            aria-label={`Delete ${String(row.values.title || "Untitled row")}`}
+                            title="Delete row"
+                            className="mx-auto grid h-9 w-9 place-items-center rounded-md text-[var(--subtle)] opacity-0 transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] group-hover:opacity-100"
                           >
-                            ×
+                            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-[1.8]"><path d="M5 7h14M9 7V4.5h6V7m2 0-.7 13h-8.6L7 7m3.5 4v5.5m3-5.5v5.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                           </button>
 
                         </td>
@@ -2320,7 +2337,7 @@ export default function DatabasePage() {
 
       )}
 
-      {selectedRow && <aside aria-label="Row detail pane" className="fixed inset-y-0 right-0 z-50 w-full max-w-[52vw] overflow-y-auto border-l border-[var(--border)] bg-[var(--surface-elevated)] px-6 py-5 shadow-sm"><div className="flex items-center justify-between"><button aria-label="Close row pane" onClick={() => { if (rowPaneOpenedFromParent.current) { rowPaneOpenedFromParent.current = false; router.back(); } else { router.push(`/workspaces/${workspaceId}/databases/${databaseId}`); } }} className="text-sm text-[var(--muted)]">× Close</button><Link aria-label="Expand row" href={`/workspaces/${workspaceId}/databases/${databaseId}/rows/${selectedRow.id}`} className="text-sm text-[var(--secondary)]">↗ Expand</Link></div><h2 className="proveit-heading mt-8 text-3xl font-semibold">{String(selectedRow.values.title || "Untitled")}</h2><div className="mt-6 border-y border-[var(--border)] py-2">{database.properties.filter((property) => property.type !== "title").map((property) => <div key={property.id} className="flex min-h-10 items-center"><span className="w-40 shrink-0 text-sm text-[var(--muted)]">{property.name}</span><div className="min-w-0 flex-1">{renderCell(selectedRow, property)}</div></div>)}</div><Comments workspaceId={workspaceId} entityType="database-row" entityId={`${databaseId}:${selectedRow.id}`} /></aside>}
+      <SideSheet open={Boolean(selectedRow)} onClose={closeRowPane} title={String(selectedRow?.values.title || "Untitled row")} description={`${database.name} · Database row`} className="sm:w-[min(46rem,calc(100vw-3rem))]">{selectedRow ? <section role="complementary" aria-label="Row detail pane"><div className="flex justify-end"><Link aria-label="Expand row" href={`/workspaces/${workspaceId}/databases/${databaseId}/rows/${selectedRow.id}`} className="proveit-secondary-button">Open full page</Link></div><div className="mt-5 border-y border-[var(--border)] py-2">{database.properties.filter((property) => property.type !== "title").map((property) => <div key={property.id} className="grid min-h-11 gap-1 py-2 text-sm sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-center sm:gap-3 sm:py-0"><span className="text-[var(--muted)]">{property.name}</span><div className="min-w-0">{renderCell(selectedRow, property)}</div></div>)}</div><Comments workspaceId={workspaceId} entityType="database-row" entityId={`${databaseId}:${selectedRow.id}`} /></section> : null}</SideSheet>
       {viewDialog && <div ref={viewDialogRef} role="dialog" aria-modal="true" aria-labelledby="saved-view-dialog-title" aria-describedby={viewDialog === "delete" ? "saved-view-dialog-description" : undefined} className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !savingView) closeViewDialog(); }} onKeyDown={handleViewDialogKeyDown}>
         <form onSubmit={(event) => { event.preventDefault(); if (viewDialog === "delete") void deleteActiveView(); else void submitViewDialog(); }} className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 shadow-[var(--shadow-md)]">
           <h2 id="saved-view-dialog-title" className="proveit-section-title">{viewDialog === "delete" ? "Delete saved view" : viewDialog === "rename" ? "Rename saved view" : "Create saved view"}</h2>

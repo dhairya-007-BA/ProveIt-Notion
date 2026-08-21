@@ -129,17 +129,17 @@ export default function ResetPasswordForm({
   }
 
   return (
-    <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6">
+    <section aria-labelledby="reset-password-heading" className="proveit-card mb-6 p-5 sm:p-6">
       {!temporaryPassword ? (
         <>
           {/* HEADER */}
 
           <div>
-            <h2 className="text-lg font-semibold">
+            <h2 id="reset-password-heading" className="proveit-section-title">
               Reset password
             </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-[var(--muted)]">
               Generate a temporary password
               for{" "}
               <strong>
@@ -151,7 +151,7 @@ export default function ResetPasswordForm({
 
           {/* EXPLANATION */}
 
-          <div className="mt-6 rounded-lg bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
+          <div className="mt-6 rounded-lg bg-[var(--status-warning-bg)] px-4 py-4 text-sm leading-6 text-[var(--warning)]">
             A temporary password will be
             generated automatically. Give
             it securely to the employee.
@@ -161,19 +161,19 @@ export default function ResetPasswordForm({
           </div>
 
           {error && (
-            <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div role="alert" className="mt-4 rounded-lg bg-[var(--status-danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
               {error}
             </div>
           )}
 
           {/* ACTIONS */}
 
-          <div className="mt-6 flex justify-end gap-3">
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
               disabled={loading}
               onClick={onCancel}
-              className="rounded-lg px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              className="proveit-secondary-button disabled:opacity-50"
             >
               Cancel
             </button>
@@ -182,7 +182,7 @@ export default function ResetPasswordForm({
               type="button"
               disabled={loading}
               onClick={handleReset}
-              className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading
                 ? "Generating..."
@@ -195,11 +195,11 @@ export default function ResetPasswordForm({
           {/* SUCCESS */}
 
           <div>
-            <h2 className="text-lg font-semibold">
+            <h2 id="reset-password-heading" className="proveit-section-title">
               Temporary password generated
             </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-[var(--muted)]">
               Give this password securely
               to{" "}
               <strong>
@@ -209,20 +209,20 @@ export default function ResetPasswordForm({
             </p>
           </div>
 
-          <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-green-700">
+          <div className="mt-6 rounded-lg border border-[var(--success)]/30 bg-[var(--status-success-bg)] p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--success)]">
               Temporary password
             </p>
 
             <div className="mt-3 flex items-center gap-3">
-              <code className="flex-1 break-all rounded-lg border border-green-200 bg-white px-4 py-3 text-base font-semibold text-gray-900">
+              <code className="min-w-0 flex-1 break-all rounded-lg border border-[var(--success)]/30 bg-[var(--surface)] px-4 py-3 text-base font-semibold text-[var(--foreground)]">
                 {temporaryPassword}
               </code>
 
               <button
                 type="button"
                 onClick={copyPassword}
-                className="rounded-lg border border-green-200 bg-white px-4 py-3 text-sm font-medium text-green-800 hover:bg-green-100"
+                className="proveit-secondary-button"
               >
                 {copied
                   ? "Copied!"
@@ -233,7 +233,7 @@ export default function ResetPasswordForm({
 
           {/* WARNING */}
 
-          <div className="mt-4 rounded-lg bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-800">
+          <div className="mt-4 rounded-lg bg-[var(--status-warning-bg)] px-4 py-4 text-sm leading-6 text-[var(--warning)]">
             Save or share this temporary
             password now. It is not stored
             in Firestore and will not be
@@ -241,7 +241,7 @@ export default function ResetPasswordForm({
             this screen.
           </div>
 
-          <div className="mt-4 rounded-lg bg-gray-50 px-4 py-4 text-sm leading-6 text-gray-600">
+          <div className="mt-4 rounded-lg bg-[var(--surface-muted)] px-4 py-4 text-sm leading-6 text-[var(--muted)]">
             The employee will sign in using
             their Employee ID and this
             temporary password. ProveIt will
@@ -250,7 +250,7 @@ export default function ResetPasswordForm({
           </div>
 
           {error && (
-            <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div role="alert" className="mt-4 rounded-lg bg-[var(--status-danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
               {error}
             </div>
           )}
@@ -261,13 +261,13 @@ export default function ResetPasswordForm({
             <button
               type="button"
               onClick={onSaved}
-              className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+              className="proveit-primary-button"
             >
               Done
             </button>
           </div>
         </>
       )}
-    </div>
+    </section>
   );
 }

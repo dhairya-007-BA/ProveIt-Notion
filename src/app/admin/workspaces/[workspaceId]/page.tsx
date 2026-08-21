@@ -11,6 +11,7 @@ import { getMembershipsForWorkspace } from "@/lib/memberships";
 import { WorkspaceAccentColor, WorkspaceKind } from "@/types/workspace";
 import WorkspaceMembersAccess from "@/components/admin/workspace-members-access";
 import { BackButton } from "@/components/back-button";
+import Sidebar from "@/components/sidebar";
 
 const accentOptions: { value: WorkspaceAccentColor; label: string; color: string }[] = [
   { value: "proveit-blue", label: "ProveIt blue", color: "var(--accent-proveit-blue)" },
@@ -96,7 +97,7 @@ export default function WorkspaceSettingsPage() {
   if (!settings) return <main className="grid min-h-screen place-items-center text-sm text-[var(--danger)]">{error || "Workspace unavailable."}</main>;
   const accessSummary = workspaceId === "company" ? "All active ProveIt employees can access this workspace." : workspaceId === "board" ? "Board access is controlled by the organization-level BOD role." : `${memberCount} explicit ${memberCount === 1 ? "member" : "members"} have access.`;
 
-  return <main className="min-h-screen bg-[var(--background)]"><section className="proveit-content"><div className="proveit-content-inner max-w-4xl">
+  return <main className="flex min-h-screen bg-[var(--background)]"><Sidebar /><section className="proveit-content"><div className="proveit-content-inner max-w-4xl">
     <BackButton href="/admin/workspaces" label="Workspaces" />
     <header className="proveit-page-header"><div className="flex items-center gap-4"><span className="grid h-12 w-12 place-items-center rounded-xl border border-[var(--border)] bg-[var(--surface)] text-2xl shadow-[var(--shadow-sm)]">{settings.icon}</span><div><p className="proveit-label">Administration</p><h1 className="proveit-page-title mt-1">{settings.name} settings</h1></div></div>{settings.active && !settings.deleted ? <Link href={`/workspaces/${workspaceId}`} className="proveit-primary-button">Open workspace</Link> : <span className="text-sm text-[var(--muted)]">{settings.deleted ? "This workspace was deleted permanently." : "Restore this workspace to open it."}</span>}</header>
     <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted)]">Control the workspace identity and access foundation. More workspace defaults can be added here without changing the core route architecture.</p>

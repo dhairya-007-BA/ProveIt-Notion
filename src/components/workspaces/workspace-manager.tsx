@@ -24,6 +24,7 @@ export default function WorkspaceManager() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
 
   const [name, setName] = useState("");
   const [icon, setIcon] = useState(DEFAULT_ICON);
@@ -33,12 +34,14 @@ export default function WorkspaceManager() {
   async function loadWorkspaces() {
     try {
       setLoading(true);
+      setError("");
 
       const data = await getWorkspaces();
 
       setWorkspaces(data);
     } catch (error) {
       console.error("Failed to load workspaces:", error);
+      setError("Workspaces could not be loaded. Please retry.");
     } finally {
       setLoading(false);
     }
@@ -55,6 +58,7 @@ export default function WorkspaceManager() {
       })
       .catch((error) => {
         console.error("Failed to load workspaces:", error);
+        if (current) setError("Workspaces could not be loaded. Please retry.");
       })
       .finally(() => {
         if (current) {
@@ -164,17 +168,17 @@ export default function WorkspaceManager() {
     <div className="mx-auto max-w-5xl">
       {/* Header */}
 
-      <div className="mb-8 flex items-start justify-between">
+      <div className="proveit-page-header mb-8">
         <div>
-          <p className="mb-2 text-sm font-medium text-gray-500">
+          <p className="proveit-label mb-2">
             Administration
           </p>
 
-          <h1 className="text-3xl font-semibold tracking-tight">
+          <h1 className="proveit-page-title">
             Workspaces
           </h1>
 
-          <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500">
+          <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">
             Create and manage the spaces used across ProveIt.
             Archived workspaces retain their historical data.
           </p>
@@ -182,7 +186,7 @@ export default function WorkspaceManager() {
 
         <button
           onClick={() => setCreating(true)}
-          className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+          className="proveit-primary-button"
         >
           + New workspace
         </button>
@@ -191,22 +195,22 @@ export default function WorkspaceManager() {
       {/* Create workspace form */}
 
       {creating && (
-        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
+        <div className="proveit-card mb-6 p-5">
           <h2 className="font-medium">
             Create workspace
           </h2>
 
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-[var(--muted)]">
             Add a new workspace to ProveIt.
           </p>
 
-          <div className="mt-4 flex gap-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-[4rem_1fr]">
             <input
               value={icon}
               onChange={(event) =>
                 setIcon(event.target.value)
               }
-              className="w-16 rounded-lg border border-gray-200 px-3 py-2 text-center"
+              className="proveit-control w-full px-3 py-2 text-center"
               maxLength={4}
               aria-label="Workspace icon"
             />
@@ -217,7 +221,8 @@ export default function WorkspaceManager() {
                 setName(event.target.value)
               }
               placeholder="Workspace name"
-              className="flex-1 rounded-lg border border-gray-200 px-3 py-2 outline-none focus:border-gray-400"
+              aria-label="Workspace name"
+              className="proveit-control min-w-0 px-3 py-2"
             />
           </div>
 
@@ -228,7 +233,7 @@ export default function WorkspaceManager() {
                 setName("");
                 setIcon(DEFAULT_ICON);
               }}
-              className="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+              className="proveit-secondary-button"
             >
               Cancel
             </button>
@@ -236,7 +241,7 @@ export default function WorkspaceManager() {
             <button
               onClick={handleCreateWorkspace}
               disabled={!name.trim()}
-              className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-40"
             >
               Create
             </button>
@@ -246,9 +251,10 @@ export default function WorkspaceManager() {
 
       {/* Workspace list */}
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      {error && <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--danger)]/30 bg-[var(--status-danger-bg)] p-4 text-sm text-[var(--danger)]"><span>{error}</span><button type="button" onClick={() => void loadWorkspaces()} className="proveit-secondary-button">Retry</button></div>}
+      <div className="proveit-card overflow-hidden">
         {loading ? (
-          <div className="p-6 text-sm text-gray-500">
+          <div className="p-6 text-sm text-[var(--muted)]">
             Loading workspaces...
           </div>
         ) : workspaces.length === 0 ? (
@@ -263,13 +269,13 @@ export default function WorkspaceManager() {
               No workspaces yet
             </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-[var(--muted)]">
               Set up the foundational ProveIt workspaces.
             </p>
 
             <button
               onClick={handleSeedWorkspaces}
-              className="mt-5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+              className="proveit-primary-button mt-5"
             >
               Set up ProveIt workspaces
             </button>
@@ -280,10 +286,10 @@ export default function WorkspaceManager() {
           workspaces.map((workspace) => (
             <div
               key={workspace.id}
-              className="flex items-center justify-between border-b border-gray-100 px-5 py-4 last:border-b-0"
+              className="flex flex-col gap-4 border-b border-[var(--border)] px-4 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:px-5"
             >
               <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-xl">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-muted)] text-xl">
                   {workspace.icon || DEFAULT_ICON}
                 </div>
 
@@ -297,26 +303,26 @@ export default function WorkspaceManager() {
                     </Link>
 
                     {workspace.deletedAt ? (
-                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-700">
+                      <span className="rounded-full bg-[var(--status-danger-bg)] px-2 py-0.5 text-xs text-[var(--danger)]">
                         Deleted permanently
                       </span>
                     ) : !workspace.active && (
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                      <span className="rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-xs text-[var(--muted)]">
                         Archived
                       </span>
                     )}
 
-                    <span className="rounded-full border border-gray-200 px-2 py-0.5 text-xs capitalize text-gray-400">
+                    <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs capitalize text-[var(--subtle)]">
                       {workspace.kind}
                     </span>
                   </div>
 
-                  <p className="mt-0.5 text-xs text-gray-400">
+                  <p className="mt-0.5 text-xs text-[var(--subtle)]">
                     /{workspace.slug}
                   </p>
 
                   {workspace.description && (
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-1 text-sm text-[var(--muted)]">
                       {workspace.description}
                     </p>
                   )}
@@ -325,13 +331,13 @@ export default function WorkspaceManager() {
 
               <div>
                 {workspace.deletedAt ? (
-                  <span className="text-sm text-gray-400">Tombstoned</span>
+                  <span className="text-sm text-[var(--subtle)]">Tombstoned</span>
                 ) : workspace.active ? (
                   <button
                     onClick={() =>
                       handleArchive(workspace.id)
                     }
-                    className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                    className="proveit-secondary-button"
                   >
                     Archive
                   </button>
@@ -340,7 +346,7 @@ export default function WorkspaceManager() {
                     onClick={() =>
                       handleRestore(workspace.id)
                     }
-                    className="rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                    className="proveit-secondary-button"
                   >
                     Restore
                   </button>
@@ -353,19 +359,19 @@ export default function WorkspaceManager() {
 
       {/* Information */}
 
-      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5">
+      <div className="proveit-card mt-6 p-5">
         <h3 className="text-sm font-medium">
           About workspaces
         </h3>
 
-        <p className="mt-2 text-sm leading-6 text-gray-500">
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
           Workspaces organize ProveIt&apos;s teams, documents,
           tasks, meetings, databases, and historical records.
           Archiving a workspace removes it from normal navigation
           without deleting its underlying information.
         </p>
 
-        <p className="mt-2 text-sm leading-6 text-gray-500">
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
           Workspace administration is restricted to members of
           the Board of Directors.
         </p>

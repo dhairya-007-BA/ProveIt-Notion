@@ -106,13 +106,13 @@ export default function EditEmployeeForm({
   }
 
   return (
-    <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6">
+    <section aria-labelledby="edit-employee-heading" className="proveit-card mb-6 p-5 sm:p-6">
       <div>
-        <h2 className="text-lg font-semibold">
+        <h2 id="edit-employee-heading" className="proveit-section-title">
           Edit employee
         </h2>
 
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-[var(--muted)]">
           Update employee information and
           workspace access.
         </p>
@@ -129,12 +129,13 @@ export default function EditEmployeeForm({
             </label>
 
             <input
+              aria-label="Full name"
               required
               value={name}
               onChange={(event) =>
                 setName(event.target.value)
               }
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 outline-none focus:border-gray-400"
+              className="proveit-control w-full px-3 py-2.5"
             />
           </div>
 
@@ -144,12 +145,13 @@ export default function EditEmployeeForm({
             </label>
 
             <input
+              aria-label="Employee ID"
               disabled
               value={employee.employeeId}
-              className="w-full cursor-not-allowed rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-gray-500"
+              className="proveit-control w-full cursor-not-allowed bg-[var(--surface-muted)] px-3 py-2.5 text-[var(--muted)]"
             />
 
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-[var(--subtle)]">
               Employee IDs cannot currently
               be changed.
             </p>
@@ -162,6 +164,7 @@ export default function EditEmployeeForm({
           </label>
 
           <select
+            aria-label="Role"
             value={role}
             disabled={editingYourself}
             onChange={(event) =>
@@ -170,7 +173,7 @@ export default function EditEmployeeForm({
                   .value as EmployeeRole
               )
             }
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500"
+            className="proveit-control w-full px-3 py-2.5 disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)] disabled:text-[var(--muted)]"
           >
             <option value="business_intern">
               Business Intern
@@ -186,7 +189,7 @@ export default function EditEmployeeForm({
           </select>
 
           {editingYourself && (
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-[var(--muted)]">
               You cannot change your own BOD
               role.
             </p>
@@ -194,7 +197,7 @@ export default function EditEmployeeForm({
         </div>
 
         {role === "business_intern" && (
-          <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+          <div className="rounded-lg bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
             Workspace access:{" "}
             <strong>
               Company + Business
@@ -203,7 +206,7 @@ export default function EditEmployeeForm({
         )}
 
         {role === "tech_intern" && (
-          <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+          <div className="rounded-lg bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
             Workspace access:{" "}
             <strong>
               Company + Technology
@@ -212,7 +215,7 @@ export default function EditEmployeeForm({
         )}
 
         {role === "bod" && (
-          <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+          <div className="rounded-lg bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
             Workspace access:{" "}
             <strong>
               Company + Business +
@@ -223,17 +226,17 @@ export default function EditEmployeeForm({
         )}
 
         {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="rounded-lg bg-[var(--status-danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
             {error}
           </div>
         )}
 
-        <div className="flex justify-end gap-3">
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
             disabled={loading}
             onClick={onCancel}
-            className="rounded-lg px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+            className="proveit-secondary-button disabled:opacity-50"
           >
             Cancel
           </button>
@@ -244,7 +247,7 @@ export default function EditEmployeeForm({
               loading ||
               !name.trim()
             }
-            className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
               ? "Saving..."
@@ -252,6 +255,6 @@ export default function EditEmployeeForm({
           </button>
         </div>
       </form>
-    </div>
+    </section>
   );
 }

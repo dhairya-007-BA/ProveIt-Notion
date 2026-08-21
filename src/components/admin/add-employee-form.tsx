@@ -107,13 +107,13 @@ export default function AddEmployeeForm({
   }
 
   return (
-    <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6">
+    <section aria-labelledby="add-employee-heading" className="proveit-card mb-6 p-5 sm:p-6">
       <div>
-        <h2 className="text-lg font-semibold">
+        <h2 id="add-employee-heading" className="proveit-section-title">
           Add employee
         </h2>
 
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-[var(--muted)]">
           Create a ProveIt account and assign
           initial workspace access.
         </p>
@@ -130,13 +130,14 @@ export default function AddEmployeeForm({
             </label>
 
             <input
+              aria-label="Full name"
               required
               value={name}
               onChange={(event) =>
                 setName(event.target.value)
               }
               placeholder="Jane Doe"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 outline-none focus:border-gray-400"
+              className="proveit-control w-full px-3 py-2.5"
             />
           </div>
 
@@ -146,6 +147,7 @@ export default function AddEmployeeForm({
             </label>
 
             <input
+              aria-label="Employee ID"
               required
               value={employeeId}
               onChange={(event) =>
@@ -154,7 +156,7 @@ export default function AddEmployeeForm({
                 )
               }
               placeholder="1-002"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 outline-none focus:border-gray-400"
+              className="proveit-control w-full px-3 py-2.5"
             />
           </div>
         </div>
@@ -166,6 +168,7 @@ export default function AddEmployeeForm({
             </label>
 
             <select
+              aria-label="Role"
               value={role}
               onChange={(event) =>
                 setRole(
@@ -173,7 +176,7 @@ export default function AddEmployeeForm({
                     .value as EmployeeRole
                 )
               }
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5"
+              className="proveit-control w-full px-3 py-2.5"
             >
               <option value="business_intern">
                 Business Intern
@@ -195,6 +198,7 @@ export default function AddEmployeeForm({
             </label>
 
             <input
+              aria-label="Temporary password"
               required
               type="password"
               minLength={8}
@@ -205,13 +209,13 @@ export default function AddEmployeeForm({
                 )
               }
               placeholder="Minimum 8 characters"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 outline-none focus:border-gray-400"
+              className="proveit-control w-full px-3 py-2.5"
             />
           </div>
         </div>
 
         {role === "business_intern" && (
-          <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+          <div className="rounded-lg bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
             Workspace access:{" "}
             <strong>
               Company + Business
@@ -220,7 +224,7 @@ export default function AddEmployeeForm({
         )}
 
         {role === "tech_intern" && (
-          <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+          <div className="rounded-lg bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
             Workspace access:{" "}
             <strong>
               Company + Technology
@@ -229,14 +233,14 @@ export default function AddEmployeeForm({
         )}
 
         {role === "bod" && (
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
             Workspace access:{" "}
             <strong>
               Company + Business + Technology +
               Board + Administration
             </strong>
 
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-[var(--subtle)]">
               BOD members receive privileged
               administrative access.
             </p>
@@ -244,17 +248,17 @@ export default function AddEmployeeForm({
         )}
 
         {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="rounded-lg bg-[var(--status-danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
             {error}
           </div>
         )}
 
-        <div className="flex justify-end gap-3">
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
             disabled={loading}
             onClick={onCancel}
-            className="rounded-lg px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+            className="proveit-secondary-button disabled:opacity-50"
           >
             Cancel
           </button>
@@ -262,7 +266,7 @@ export default function AddEmployeeForm({
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
               ? "Creating..."
@@ -270,6 +274,6 @@ export default function AddEmployeeForm({
           </button>
         </div>
       </form>
-    </div>
+    </section>
   );
 }

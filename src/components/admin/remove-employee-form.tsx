@@ -108,17 +108,17 @@ export default function RemoveEmployeeForm({
   }
 
   return (
-    <div className="mb-6 rounded-xl border border-red-200 bg-white p-6">
+    <section aria-labelledby="remove-employee-heading" className="mb-6 rounded-xl border border-[var(--danger)]/30 bg-[var(--surface)] p-5 sm:p-6">
       <div>
-        <p className="text-sm font-medium text-red-600">
+        <p className="text-sm font-medium text-[var(--danger)]">
           Permanent removal
         </p>
 
-        <h2 className="mt-1 text-lg font-semibold">
+        <h2 id="remove-employee-heading" className="mt-1 text-lg font-semibold">
           Remove {employee.name}
         </h2>
 
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
           This will permanently remove the
           employee&apos;s login access and
           active workspace memberships.
@@ -127,7 +127,7 @@ export default function RemoveEmployeeForm({
         </p>
       </div>
 
-      <div className="mt-5 rounded-lg bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
+      <div className="mt-5 rounded-lg bg-[var(--status-danger-bg)] px-4 py-3 text-sm leading-6 text-[var(--danger)]">
         <strong>
           This action cannot restore the existing
           authentication account.
@@ -141,7 +141,7 @@ export default function RemoveEmployeeForm({
         onSubmit={handleSubmit}
         className="mt-6"
       >
-        <label className="block text-sm font-medium text-gray-700">
+        <label htmlFor="remove-employee-confirmation" className="block text-sm font-medium text-[var(--foreground)]">
           Type{" "}
           <span className="font-semibold">
             {employee.employeeId}
@@ -150,6 +150,7 @@ export default function RemoveEmployeeForm({
         </label>
 
         <input
+          id="remove-employee-confirmation"
           required
           value={confirmation}
           onChange={(event) =>
@@ -161,21 +162,21 @@ export default function RemoveEmployeeForm({
             employee.employeeId
           }
           autoComplete="off"
-          className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2.5 outline-none focus:border-red-400"
+          className="proveit-control mt-2 w-full px-3 py-2.5"
         />
 
         {error && (
-          <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="mt-4 rounded-lg bg-[var(--status-danger-bg)] px-4 py-3 text-sm text-[var(--danger)]">
             {error}
           </div>
         )}
 
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
             disabled={loading}
             onClick={onCancel}
-            className="rounded-lg px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+            className="proveit-secondary-button disabled:opacity-50"
           >
             Cancel
           </button>
@@ -186,7 +187,7 @@ export default function RemoveEmployeeForm({
               loading ||
               !matches
             }
-            className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg bg-[var(--danger)] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {loading
               ? "Removing..."
@@ -194,6 +195,6 @@ export default function RemoveEmployeeForm({
           </button>
         </div>
       </form>
-    </div>
+    </section>
   );
 }

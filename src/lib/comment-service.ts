@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase-admin";
 import { CustomFieldAuthError, requireCustomFieldWorkspaceUser } from "@/lib/custom-field-route-auth";
+import { deliverPreparedCanonicalNotification, dispatchCanonicalNotification, prepareCanonicalNotification } from "@/lib/notification-service";
 
 export const commentEntityTypes = ["task", "meeting", "document", "database-row"] as const;
 export type CommentEntityType = (typeof commentEntityTypes)[number];
@@ -85,16 +86,41 @@ export async function createComment(request: Request, workspaceId: string, entit
   const [author, mentions] = await Promise.all([adminDb.collection("users").doc(actor.uid).get(), mentionSnapshots(workspaceId, mentionedUserIds)]);
   assertMentionsAppearInBody(body, mentions);
   const comment = adminDb.collection("comments").doc();
+  const authorName = author.data()?.name || "A teammate";
+  const notificationEvents = [
+    ...mentions.filter((item) => item.uid !== actor.uid && item.uid !== parentAuthorUid).map((mentioned) => ({
+      eventId: `mention_${comment.id}_${mentioned.uid}`,
+      workspaceId,
+      recipientUid: mentioned.uid,
+      actorUid: actor.uid,
+      eventType: "mention" as const,
+      entityType,
+      entityId,
+      commentId: comment.id,
+      title: "You were mentioned",
+      message: `${authorName} mentioned you in a comment.`,
+    })),
+    ...(parentAuthorUid && parentAuthorUid !== actor.uid ? [{
+      eventId: `reply_${comment.id}_${parentAuthorUid}`,
+      workspaceId,
+      recipientUid: parentAuthorUid,
+      actorUid: actor.uid,
+      eventType: "reply" as const,
+      entityType,
+      entityId,
+      commentId: comment.id,
+      title: "New reply",
+      message: `${authorName} replied to your comment.`,
+    }] : []),
+  ];
+  const preparedNotifications = await Promise.all(notificationEvents.map(prepareCanonicalNotification));
   const batch = adminDb.batch();
-  batch.set(comment, { workspaceId, entityType, entityId, body, authorUid: actor.uid, authorName: author.data()?.name || "Employee", parentCommentId: parentCommentId || null, mentionedUserIds: mentions.map((item) => item.uid), mentionSnapshots: mentions, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-  for (const mentioned of mentions.filter((item) => item.uid !== actor.uid && item.uid !== parentAuthorUid)) {
-    const notification = adminDb.collection("notifications").doc(`mention_${comment.id}_${mentioned.uid}`);
-    batch.set(notification, { workspaceId, recipientUid: mentioned.uid, actorUid: actor.uid, eventType: "mention", entityType, entityId, commentId: comment.id, title: "You were mentioned", message: `${author.data()?.name || "A teammate"} mentioned you in a comment.`, readAt: null, archivedAt: null, createdAt: FieldValue.serverTimestamp() });
-  }
-  if (parentAuthorUid && parentAuthorUid !== actor.uid) {
-    batch.set(adminDb.collection("notifications").doc(`reply_${comment.id}_${parentAuthorUid}`), { workspaceId, recipientUid: parentAuthorUid, actorUid: actor.uid, eventType: "reply", entityType, entityId, commentId: comment.id, title: "New reply", message: `${author.data()?.name || "A teammate"} replied to your comment.`, readAt: null, archivedAt: null, createdAt: FieldValue.serverTimestamp() });
-  }
+  batch.set(comment, { workspaceId, entityType, entityId, body, authorUid: actor.uid, authorName: author.data()?.name || "Employee", parentCommentId: parentCommentId || null, mentionedUserIds: mentions.map((item) => item.uid), notifiedMentionUserIds: mentions.map((item) => item.uid), mentionSnapshots: mentions, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  preparedNotifications.forEach((prepared) => { if (prepared.notification) batch.set(adminDb.collection("notifications").doc(prepared.notification.id), prepared.notification.data); });
   await batch.commit();
+  await Promise.all(preparedNotifications.map((prepared) => deliverPreparedCanonicalNotification(prepared).catch((error) => {
+    console.error("Comment email delivery status could not be recorded", { eventId: prepared.event.eventId, errorCategory: error instanceof Error ? error.name : "unknown" });
+  })));
   return { id: comment.id };
 }
 
@@ -112,13 +138,35 @@ export async function updateComment(request: Request, workspaceId: string, comme
   assertMentionsAppearInBody(body, mentions);
   const storedMentionIds: unknown = comment.data()?.mentionedUserIds;
   const existingIds = new Set(Array.isArray(storedMentionIds) ? storedMentionIds.filter((item: unknown): item is string => typeof item === "string") : []);
+  const storedNotifiedIds: unknown = comment.data()?.notifiedMentionUserIds;
+  const notifiedIds = new Set(Array.isArray(storedNotifiedIds)
+    ? storedNotifiedIds.filter((item: unknown): item is string => typeof item === "string")
+    : existingIds);
   const author = await adminDb.collection("users").doc(actor.uid).get();
+  const storedEntityType = comment.data()?.entityType;
+  const storedEntityId = comment.data()?.entityId;
+  if (!validEntityType(storedEntityType) || typeof storedEntityId !== "string" || !storedEntityId.trim()) throw new CustomFieldAuthError("Comment target not found.", 404);
+  const newMentionEvents = mentions.filter((item) => item.uid !== actor.uid && !notifiedIds.has(item.uid)).map((mentioned) => ({
+    eventId: `mention_${commentId}_${mentioned.uid}`,
+    workspaceId,
+    recipientUid: mentioned.uid,
+    actorUid: actor.uid,
+    eventType: "mention" as const,
+    entityType: storedEntityType,
+    entityId: storedEntityId,
+    commentId,
+    title: "You were mentioned",
+    message: `${author.data()?.name || "A teammate"} mentioned you in a comment.`,
+  }));
   const batch = adminDb.batch();
-  batch.update(comment.ref, { body, mentionedUserIds: mentions.map((item) => item.uid), mentionSnapshots: mentions, updatedAt: FieldValue.serverTimestamp(), editedAt: FieldValue.serverTimestamp() });
-  for (const mentioned of mentions.filter((item) => item.uid !== actor.uid && !existingIds.has(item.uid))) {
-    batch.set(adminDb.collection("notifications").doc(`mention_${comment.id}_${mentioned.uid}`), { workspaceId, recipientUid: mentioned.uid, actorUid: actor.uid, eventType: "mention", entityType: comment.data()?.entityType, entityId: comment.data()?.entityId, commentId, title: "You were mentioned", message: `${author.data()?.name || "A teammate"} mentioned you in a comment.`, readAt: null, archivedAt: null, createdAt: FieldValue.serverTimestamp() });
-  }
+  batch.update(comment.ref, { body, mentionedUserIds: mentions.map((item) => item.uid), notifiedMentionUserIds: [...notifiedIds], mentionSnapshots: mentions, updatedAt: FieldValue.serverTimestamp(), editedAt: FieldValue.serverTimestamp() });
   await batch.commit();
+  const outcomes = await Promise.allSettled(newMentionEvents.map((event) => dispatchCanonicalNotification(event)));
+  const processedRecipientIds = outcomes.flatMap((outcome, index) => outcome.status === "fulfilled" ? [newMentionEvents[index].recipientUid] : []);
+  if (processedRecipientIds.length) await comment.ref.update({ notifiedMentionUserIds: FieldValue.arrayUnion(...processedRecipientIds) });
+  outcomes.forEach((outcome, index) => {
+    if (outcome.status === "rejected") console.error("Edited-comment notification could not be dispatched", { eventId: newMentionEvents[index].eventId, errorCategory: outcome.reason instanceof Error ? outcome.reason.name : "unknown" });
+  });
 }
 
 export async function deleteComment(request: Request, workspaceId: string, commentId: string) {

@@ -19,6 +19,7 @@ export async function getUsers(): Promise<ProveItUser[]> {
       uid: userDoc.id,
       employeeId: data.employeeId,
       name: data.name,
+      email: typeof data.email === "string" ? data.email : undefined,
       phoneNumber: data.phoneNumber || undefined,
       department: data.department || undefined,
       group: data.role,

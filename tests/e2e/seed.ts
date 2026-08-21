@@ -62,10 +62,24 @@ async function clearDatabaseViews() {
   if (!views.empty) await batch.commit();
 }
 
+async function clearMeetingExecutionFixtures() {
+  const executions = await firestore.collection("meetingTaskExecutions").where("meetingId", "==", "meeting-e2e").get();
+  if (executions.empty) return;
+  const batch = firestore.batch();
+  executions.docs.forEach((execution) => {
+    const taskId = execution.data().taskId;
+    if (typeof taskId === "string") batch.delete(firestore.doc(`tasks/${taskId}`));
+    batch.delete(firestore.doc(`activity/meeting-ai-${execution.id}`));
+    batch.delete(execution.ref);
+  });
+  await batch.commit();
+}
+
 async function main() {
   await clearCollaborationFixtures();
   await clearDatabaseRows();
   await clearDatabaseViews();
+  await clearMeetingExecutionFixtures();
   await ensureTestUser(userId, employeeId, "database-test-password");
   await ensureTestUser("mentioned-user", "mentioned-user", "mentioned-user-password");
   await ensureTestUser("admin-e2e-user", "admin-test", "admin-test-password");
@@ -224,6 +238,32 @@ async function main() {
     meetingUrl: "https://example.test/meeting",
     transcript: "Initial transcript",
     notes: "Initial notes",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  await firestore.doc("meetingIntelligence/meeting-e2e").set({
+    meetingId: "meeting-e2e",
+    workspaceId: "company",
+    rawTranscript: "The hiring team agreed that the interview rubric needs a final review.",
+    rawTranscriptSource: "whisper",
+    transcription: { status: "completed", attempt: 1, startedAt: new Date(), completedAt: new Date(), failedAt: null, error: null },
+    analysis: {
+      status: "completed",
+      attempt: 1,
+      startedAt: new Date(),
+      completedAt: new Date(),
+      failedAt: null,
+      error: null,
+      inputSource: "raw_transcript",
+      inputFingerprint: "e2e-fingerprint",
+      output: {
+        summary: "The team aligned on completing the candidate review rubric.",
+        decisions: ["Use the updated rubric for the next candidate."],
+        risks: ["The review must finish before the next interview."],
+        actionItems: [{ id: "ai-e2e-review-rubric", title: "Review the candidate rubric", details: "Confirm the evaluation criteria with the hiring team.", suggestedAssignee: "Mentioned User", suggestedDueDate: "2026-09-01" }],
+        followUps: [],
+      },
+    },
     createdAt: new Date(),
     updatedAt: new Date(),
   });

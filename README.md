@@ -29,6 +29,37 @@ service account rather than bundling a service-account JSON file. The identity
 must be authorized to verify revoked Firebase ID tokens and access the required
 Firebase Auth and Firestore resources.
 
+### Meeting intelligence providers
+
+Meeting intelligence is optional and fails closed when its providers are not
+configured. Configure Whisper with either the exact OpenAI-compatible endpoint
+in `WHISPER_API_URL`, or a service root in `WHISPER_BASE_URL` (the application
+appends `/v1/audio/transcriptions`). `WHISPER_API_KEY`, `WHISPER_MODEL`, and
+`WHISPER_TIMEOUT_MS` are optional for local/private deployments.
+
+Configure Ollama with `OLLAMA_BASE_URL` and `OLLAMA_MODEL`.
+`OLLAMA_TIMEOUT_MS` is optional. All of these variables are server-only and
+must never use a `NEXT_PUBLIC_` prefix.
+
+Raw Whisper transcripts and structured Ollama results are stored in the
+server-owned `meetingIntelligence` collection. They remain separate from the
+human-editable `meetings.notes` and `meetings.transcript` fields. Analysis only
+proposes action items; creating tasks requires a separate explicit approval.
+
+### Transactional email and reminders
+
+Transactional email is optional and remains server-only. Configure Resend with
+`RESEND_API_KEY` and `RESEND_FROM_EMAIL`, and set `PROVEIT_APP_URL` to the
+canonical HTTPS application origin used for notification links. When any
+required value is absent, ProveIt records delivery as unavailable and never
+reports a successful send.
+
+The bounded reminder dispatcher is exposed at `GET` or `POST
+/api/internal/reminders`. Protect it with `REMINDER_DISPATCH_SECRET` and invoke
+it from the deployment scheduler with the same value in the `Authorization:
+Bearer …` header. The endpoint is disabled with a 503 response when the secret
+is not configured. These variables must never use a `NEXT_PUBLIC_` prefix.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

@@ -35,6 +35,70 @@ The final result must look and feel like ProveIt.
 
 ---
 
+# Current implementation checkpoint — Phase 3 (August 20, 2026)
+
+The repository now includes the following production architecture:
+
+- legacy-safe, user-owned in-app and email notification preferences
+- one canonical notification service for mentions, replies, assignments,
+  invitations, task reminders, overdue work and meeting reminders
+- server-only Resend delivery with stable idempotency keys, retry leases and
+  delivery diagnostics; missing configuration reports unavailable
+- durable task-assignment and meeting-notification outboxes drained by the
+  protected reminder scheduler
+- server-only Whisper-compatible transcription and Ollama structured analysis
+  with explicit availability, processing, failure and retry states
+- immutable raw meeting transcripts kept separate from AI output and human notes
+- human-reviewed meeting action items that create provenance-linked tasks with
+  deterministic duplicate prevention and controlled Kaneo synchronization
+- server-authorized meeting creation/update and task-assignee mutations, with
+  direct client bypasses denied by Firestore Rules
+
+The external providers still require deployment configuration and live-service
+verification. Employee onboarding/password email still requires a verified work
+email provisioning model. Longer-horizon product work remains, including rich
+document blocks and history, advanced database properties/views, calendar and
+Slack integrations, general automation, import/export, and deeper activity
+reporting. This checkpoint is an implementation summary, not a declaration that
+the complete product vision is finished.
+
+---
+
+# Current implementation checkpoint — UI/UX system and polish (August 20, 2026)
+
+ProveIt now has a compatibility-first shared interface system rather than
+page-local visual conventions:
+
+- canonical light/dark brand, surface, text, border, focus and semantic-state
+  tokens, with accessible ProveIt blue as the primary action color
+- Inter body typography and Montserrat heading hierarchy retained from the
+  established brand
+- shared button, icon-button, card, form-control, avatar, empty-state, dialog,
+  side-sheet, task-status and task-priority primitives
+- one desktop/mobile navigation model with consistent SVG iconography, active
+  context and accessible account/navigation behavior
+- a denser Home command center with assignment-aware focus, overdue context,
+  workspace health and canonical activity links
+- semantic task status and priority presentation across boards, lists, forms,
+  full details, dashboards and global search
+- responsive, focus-managed task, meeting and database-row detail sheets
+- one searchable keyboard-accessible employee multi-picker for meeting create
+  and edit flows
+- intentional Profile, Inbox, Employees, workspace administration, Notion
+  migration, document-list and database-list experiences
+- resilient, Firestore-Rules-protected read fallbacks for saved database views
+  and task custom-field definitions when their server presentation routes are
+  temporarily unavailable
+
+The current UI follow-up list is deliberately narrower: the large database
+detail editor still contains some legacy compact property glyphs and several
+hand-built filter/property popovers that should eventually move fully onto the
+shared primitives; workspace emoji stored as data should be normalized through
+a product icon policy; and representative production data should receive a
+final live-provider smoke test after deployment configuration is present.
+
+---
+
 # 1. ProveIt Design System
 
 The entire product must use one intentional visual system.

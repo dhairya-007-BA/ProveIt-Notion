@@ -5,18 +5,22 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
+import { TASK_PRIORITY_META, TASK_STATUS_META, TaskPriorityBadge, TaskStatusBadge } from "@/components/ui/task-metadata";
 import { getAccessibleWorkspaces } from "@/lib/accessible-workspaces";
 import { db } from "@/lib/firebase";
+import type { TaskPriority, TaskStatus } from "@/types/task";
 
 type SearchKind = "task" | "meeting" | "document" | "database" | "database-row";
 type SearchFilter = "all" | SearchKind;
-type SearchResult = { id: string; kind: SearchKind; title: string; context: string; workspaceId: string; workspaceName: string; href: string; haystack: string };
+type SearchResult = { id: string; kind: SearchKind; title: string; context: string; workspaceId: string; workspaceName: string; href: string; haystack: string; taskStatus?: TaskStatus; taskPriority?: TaskPriority };
 
 const labels: Record<SearchKind, string> = { task: "Tasks", meeting: "Meetings", document: "Documents", database: "Databases", "database-row": "Database rows" };
 const initialSearchKinds: SearchKind[] = ["task", "document", "meeting", "database", "database-row"];
 const filterKinds: SearchFilter[] = ["all", ...initialSearchKinds];
 
 function stringValue(value: unknown) { return typeof value === "string" ? value : value == null ? "" : String(value); }
+function taskStatusValue(value: unknown): TaskStatus { return typeof value === "string" && value in TASK_STATUS_META ? value as TaskStatus : "todo"; }
+function taskPriorityValue(value: unknown): TaskPriority { return typeof value === "string" && value in TASK_PRIORITY_META ? value as TaskPriority : "medium"; }
 
 function SearchIcon({ className = "" }: { className?: string }) {
   return <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="6.5" /><path strokeLinecap="round" d="m16 16 4 4" /></svg>;
@@ -100,7 +104,7 @@ export function GlobalSearch() {
         const mapped: SearchResult[] = [];
         tasks.docs.forEach((item) => {
           const value = item.data();
-          mapped.push({ id: item.id, kind: "task", title: stringValue(value.title) || "Untitled task", context: `${stringValue(value.status) || "Not started"} · ${stringValue(value.priority) || "medium"} priority`, workspaceId: stringValue(value.workspaceId), workspaceName: names.get(stringValue(value.workspaceId)) || "Workspace", href: `/workspaces/${value.workspaceId}/tasks/${item.id}`, haystack: [value.title, value.description, value.status, value.priority].map(stringValue).join(" ") });
+          mapped.push({ id: item.id, kind: "task", title: stringValue(value.title) || "Untitled task", context: "", taskStatus: taskStatusValue(value.status), taskPriority: taskPriorityValue(value.priority), workspaceId: stringValue(value.workspaceId), workspaceName: names.get(stringValue(value.workspaceId)) || "Workspace", href: `/workspaces/${value.workspaceId}/tasks/${item.id}`, haystack: [value.title, value.description, value.status, value.priority].map(stringValue).join(" ") });
         });
         meetings.docs.forEach((item) => {
           const value = item.data();
@@ -176,7 +180,7 @@ export function GlobalSearch() {
 
   if (!open) return null;
 
-  return <div role="dialog" aria-modal="true" aria-label="Search ProveIt" className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/35 px-3 pt-4 backdrop-blur-[1px] sm:px-6 sm:pt-[18vh]" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }} onKeyDown={trapFocus}>
+  return <div role="dialog" aria-modal="true" aria-label="Search ProveIt" className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-black/35 px-3 pt-4 backdrop-blur-[1px] sm:px-6 sm:pt-[18vh]" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }} onKeyDown={trapFocus}>
     <div ref={dialogRef} className="flex w-full max-w-[700px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] shadow-[var(--shadow-md)] sm:max-h-[70vh]">
       <div className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--border)] px-4 sm:px-5">
         <SearchIcon className="h-5 w-5 shrink-0 text-[var(--secondary)]" />
@@ -195,7 +199,7 @@ export function GlobalSearch() {
         {!loading && !loadError && groups.map(([kind, label, items]) => <section key={kind} aria-label={label} className="mb-2 last:mb-0"><p className="proveit-label px-3 pb-1 pt-1.5">{label}</p>{items.map((item) => {
           const index = visible.indexOf(item);
           const isSelected = currentSelected === index;
-          return <button key={`${item.kind}-${item.id}`} id={`search-result-${index}`} type="button" role="option" aria-selected={isSelected} aria-label={`${labels[item.kind].slice(0, -1)}: ${item.title}, ${item.workspaceName}`} onMouseEnter={() => setSelected(index)} onFocus={() => setSelected(index)} onClick={() => openResult(item)} className={`flex min-h-12 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] ${isSelected ? "bg-[var(--selected)]" : "hover:bg-[var(--hover)]"}`}><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-md ${isSelected ? "bg-[var(--surface-elevated)] text-[var(--secondary)]" : "bg-[var(--surface-muted)] text-[var(--accent)]"}`}><ResultIcon kind={item.kind} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-[var(--text)]"><Highlight value={item.title} queryText={queryText} /></span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">{labels[item.kind].slice(0, -1)} · {item.workspaceName}{item.context ? ` · ${item.context}` : ""}</span></span><span className={`shrink-0 text-[var(--subtle)] transition-opacity ${isSelected ? "opacity-100" : "opacity-0"}`}><ArrowIcon /></span></button>;
+          return <button key={`${item.kind}-${item.id}`} id={`search-result-${index}`} type="button" role="option" aria-selected={isSelected} aria-label={`${labels[item.kind].slice(0, -1)}: ${item.title}, ${item.workspaceName}`} onMouseEnter={() => setSelected(index)} onFocus={() => setSelected(index)} onClick={() => openResult(item)} className={`flex min-h-12 w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] ${isSelected ? "bg-[var(--selected)]" : "hover:bg-[var(--hover)]"}`}><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-md ${isSelected ? "bg-[var(--surface-elevated)] text-[var(--secondary)]" : "bg-[var(--surface-muted)] text-[var(--accent)]"}`}><ResultIcon kind={item.kind} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-[var(--text)]"><Highlight value={item.title} queryText={queryText} /></span><span className="mt-0.5 block truncate text-xs text-[var(--muted)]">{labels[item.kind].slice(0, -1)} · {item.workspaceName}{item.context ? ` · ${item.context}` : ""}</span>{item.kind === "task" && item.taskStatus && item.taskPriority ? <span className="mt-1.5 flex flex-wrap gap-1.5"><TaskStatusBadge status={item.taskStatus} /><TaskPriorityBadge priority={item.taskPriority} /></span> : null}</span><span className={`shrink-0 text-[var(--subtle)] transition-opacity ${isSelected ? "opacity-100" : "opacity-0"}`}><ArrowIcon /></span></button>;
         })}</section>)}
       </div>
       <div className="hidden shrink-0 items-center gap-3 border-t border-[var(--border)] px-5 py-2 text-[11px] text-[var(--subtle)] sm:flex"><span className="inline-flex items-center gap-1"><Key>↑</Key><Key>↓</Key> Navigate</span><span className="inline-flex items-center gap-1"><Key>↵</Key> Open</span><span className="inline-flex items-center gap-1"><Key>Esc</Key> Close</span></div>

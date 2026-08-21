@@ -165,6 +165,38 @@ afterAll(async () => {
 });
 
 describe("database Firestore rules", () => {
+  it("prevents clients from forging task assignment notification state", async () => {
+    const member = testEnv.authenticatedContext("company-member").firestore();
+
+    await assertFails(setDoc(doc(member, "tasks", "forged-assignment-bootstrap"), {
+      workspaceId: "business",
+      title: "Valid assignment bootstrap",
+      status: "todo",
+      priority: "medium",
+      createdBy: "company-member",
+      assigneeId: "business-recipient",
+      assignmentNotification: { observedAssigneeId: null, status: "unassigned", revision: 0, hasBeenAssigned: false },
+    }));
+
+    await assertFails(setDoc(doc(member, "tasks", "forged-assignment-state"), {
+      workspaceId: "business",
+      title: "Forged assignment",
+      status: "todo",
+      priority: "medium",
+      createdBy: "company-member",
+      assigneeId: "business-recipient",
+      assignmentNotification: { observedAssigneeId: "business-recipient", status: "dispatched", revision: 99 },
+    }));
+
+    await assertFails(updateDoc(doc(member, "tasks", "custom-fields-task"), {
+      assignmentNotification: { observedAssigneeId: "business-recipient", status: "dispatched", revision: 99 },
+    }));
+
+    await assertFails(updateDoc(doc(member, "tasks", "custom-fields-task"), {
+      assigneeId: "business-recipient",
+    }));
+  });
+
   it("requires documents to be created with the authenticated user as creator", async () => {
     const member = testEnv.authenticatedContext("company-member").firestore();
 
@@ -194,6 +226,17 @@ describe("database Firestore rules", () => {
     const bod = testEnv.authenticatedContext("bod-member").firestore();
     await assertFails(deleteDoc(doc(member, "meetings", "meeting-1")));
     await assertSucceeds(deleteDoc(doc(bod, "meetings", "meeting-1")));
+  });
+
+  it("keeps meeting creation and updates behind the authorized server routes", async () => {
+    const member = testEnv.authenticatedContext("company-member").firestore();
+    await assertFails(setDoc(doc(member, "meetings", "client-created-meeting"), {
+      workspaceId: "business", title: "Bypassed meeting", createdBy: "company-member", participantIds: ["business-non-member"],
+    }));
+    await assertFails(updateDoc(doc(member, "meetings", "meeting-1"), {
+      participantIds: ["business-non-member"],
+    }));
+    await assertSucceeds(getDoc(doc(member, "meetings", "meeting-1")));
   });
 
   it("does not allow a tombstoned workspace to be restored", async () => {
@@ -300,6 +343,14 @@ describe("database Firestore rules", () => {
     }));
   });
 
+  it("keeps notification preference writes on the authenticated server route", async () => {
+    const firestore = testEnv.authenticatedContext("company-member").firestore();
+    await assertFails(updateDoc(doc(firestore, "users", "company-member"), {
+      notificationPreferences: { inApp: { mentions: false }, email: { mentions: true } },
+      updatedAt: new Date(),
+    }));
+  });
+
   it("rejects a notification sent to someone outside the workspace", async () => {
     const firestore = testEnv.authenticatedContext("company-member").firestore();
     await assertFails(setDoc(doc(firestore, "notifications", "notification-cross-workspace"), {
@@ -355,6 +406,14 @@ describe("database Firestore rules", () => {
     await assertFails(getDoc(doc(other, "notifications", "notification-recipient")));
     await assertFails(getDoc(doc(inactive, "notifications", "notification-recipient")));
     await assertFails(getDoc(doc(anonymous, "notifications", "notification-recipient")));
+  });
+
+  it("allows every active employee to read their own Company notifications", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "notifications", "notification-company"), {
+      workspaceId: "company", recipientUid: "other-member", actorUid: "company-member", entityType: "task", entityId: "task-1", readAt: null, archivedAt: null,
+    }));
+    const recipient = testEnv.authenticatedContext("other-member").firestore();
+    await assertSucceeds(getDoc(doc(recipient, "notifications", "notification-company")));
   });
 
   it("revokes notification access when the recipient loses workspace access", async () => {

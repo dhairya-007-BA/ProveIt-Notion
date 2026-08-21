@@ -73,7 +73,8 @@ service cloud.firestore {
       return activeUser()
         && !workspaceIsTombstoned(workspaceId)
         && (
-          hasActiveMembership(workspaceId)
+          workspaceId == "company"
+          || hasActiveMembership(workspaceId)
           || (isBOD() && userData().get("capabilities", {}).size() == 0)
         );
     }
@@ -91,8 +92,11 @@ service cloud.firestore {
         && get(userPathFor(userId)).data.get("active", false) == true
         && !workspaceIsTombstoned(workspaceId)
         && (
-          exists(membershipPathFor(workspaceId, userId))
-          && get(membershipPathFor(workspaceId, userId)).data.get("active", false) == true
+          workspaceId == "company"
+          || (
+            exists(membershipPathFor(workspaceId, userId))
+            && get(membershipPathFor(workspaceId, userId)).data.get("active", false) == true
+          )
         );
     }
 
@@ -147,7 +151,6 @@ service cloud.firestore {
           .affectedKeys()
           .hasOnly([
             "mustChangePassword",
-            "notificationPreferences",
             "updatedAt"
           ])
 
@@ -275,7 +278,16 @@ service cloud.firestore {
         // Custom property values are validated only by the authenticated
         // server route. Client task creation remains available for all
         // standard task fields.
-        && !request.resource.data.keys().hasAny(["customFields"]);
+        && !request.resource.data.keys().hasAny([
+          "customFields",
+          "assignmentNotification"
+        ])
+        // Assigned task creation is an authenticated server mutation so its
+        // assignment event is durably queued in the same transaction.
+        && (
+          !request.resource.data.keys().hasAny(["assigneeId"])
+          || request.resource.data.assigneeId == null
+        );
 
       allow update: if
         canAccessWorkspace(
@@ -288,7 +300,11 @@ service cloud.firestore {
         // Preserve existing custom values during normal client edits, but do
         // not permit a client to add, remove, or change the custom map.
         && !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(["customFields"]);
+          .hasAny([
+            "customFields",
+            "assignmentNotification",
+            "assigneeId"
+          ]);
 
       allow delete: if isBOD();
     }
@@ -312,19 +328,9 @@ service cloud.firestore {
           resource.data.workspaceId
         );
 
-      allow create: if
-        canAccessWorkspace(
-          request.resource.data.workspaceId
-        );
-
-      allow update: if
-        canAccessWorkspace(
-          resource.data.workspaceId
-        )
-        &&
-        canAccessWorkspace(
-          request.resource.data.workspaceId
-        );
+      // Meeting mutations are server-only so participant eligibility and
+      // canonical invitation production cannot be bypassed by a client.
+      allow create, update: if false;
 
       allow delete: if isBOD();
     }

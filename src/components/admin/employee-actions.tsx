@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { User } from "firebase/auth";
 
 import { ProveItUser } from "@/types/user";
@@ -42,6 +42,29 @@ export default function EmployeeActions({
   const [error, setError] =
     useState("");
   const [confirmingDeactivation, setConfirmingDeactivation] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const first = menuRef.current?.querySelector<HTMLButtonElement>('button:not([disabled])');
+    first?.focus();
+    const outside = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node) && !triggerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", outside);
+    return () => document.removeEventListener("mousedown", outside);
+  }, [open]);
+
+  function closeMenu() { setOpen(false); window.setTimeout(() => triggerRef.current?.focus(), 0); }
+
+  function menuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    const buttons = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') || []);
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === "Escape") { event.preventDefault(); closeMenu(); }
+    else if (event.key === "ArrowDown") { event.preventDefault(); buttons[(index + 1) % buttons.length]?.focus(); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); buttons[(index - 1 + buttons.length) % buttons.length]?.focus(); }
+  }
 
   const isCurrentUser =
     employee.uid === currentUser.uid;
@@ -129,6 +152,7 @@ export default function EmployeeActions({
   return (
     <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         disabled={loading}
         onClick={() =>
@@ -136,21 +160,24 @@ export default function EmployeeActions({
             (current) => !current
           )
         }
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-40"
+        className="flex h-10 w-10 items-center justify-center rounded-lg text-lg text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:opacity-40"
         aria-label={`Actions for ${employee.name}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         •••
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+        <div ref={menuRef} role="menu" aria-label={`Actions for ${employee.name}`} onKeyDown={menuKeyDown} className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] py-1 shadow-[var(--shadow-md)]">
 
           {/* EDIT */}
 
           <button
+            role="menuitem"
             type="button"
             onClick={handleEdit}
-            className="block w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+            className="block w-full px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--hover)] focus:bg-[var(--hover)] focus:outline-none"
           >
             Edit employee
           </button>
@@ -158,26 +185,28 @@ export default function EmployeeActions({
           {/* PASSWORD */}
 
           <button
+            role="menuitem"
             type="button"
             onClick={handleResetPassword}
-            className="block w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+            className="block w-full px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--hover)] focus:bg-[var(--hover)] focus:outline-none"
           >
             Reset password
           </button>
 
-          <div className="my-1 border-t border-gray-100" />
+          <div className="my-1 border-t border-[var(--border)]" />
 
           {/* STATUS */}
 
           {employee.active ? (
             <button
+              role="menuitem"
               type="button"
               disabled={
                 loading ||
                 isCurrentUser
               }
               onClick={() => setConfirmingDeactivation(true)}
-              className="block w-full px-4 py-2.5 text-left text-sm text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-white"
+              className="block w-full px-4 py-2.5 text-left text-sm text-[var(--warning)] hover:bg-[var(--status-warning-bg)] focus:bg-[var(--status-warning-bg)] focus:outline-none disabled:cursor-not-allowed disabled:text-[var(--subtle)] disabled:hover:bg-transparent"
             >
               {isCurrentUser
                 ? "Cannot deactivate yourself"
@@ -185,29 +214,31 @@ export default function EmployeeActions({
             </button>
           ) : (
             <button
+              role="menuitem"
               type="button"
               disabled={loading}
               onClick={() =>
                 changeStatus(true)
               }
-              className="block w-full px-4 py-2.5 text-left text-sm text-green-700 hover:bg-green-50 disabled:opacity-40"
+              className="block w-full px-4 py-2.5 text-left text-sm text-[var(--success)] hover:bg-[var(--status-success-bg)] focus:bg-[var(--status-success-bg)] focus:outline-none disabled:opacity-40"
             >
               Reactivate employee
             </button>
           )}
 
-          <div className="my-1 border-t border-gray-100" />
+          <div className="my-1 border-t border-[var(--border)]" />
 
           {/* PERMANENT REMOVAL */}
 
           <button
+            role="menuitem"
             type="button"
             disabled={
               loading ||
               isCurrentUser
             }
             onClick={handleRemove}
-            className="block w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-white"
+            className="block w-full px-4 py-2.5 text-left text-sm text-[var(--danger)] hover:bg-[var(--status-danger-bg)] focus:bg-[var(--status-danger-bg)] focus:outline-none disabled:cursor-not-allowed disabled:text-[var(--subtle)] disabled:hover:bg-transparent"
           >
             {isCurrentUser
               ? "Cannot remove yourself"
@@ -217,7 +248,7 @@ export default function EmployeeActions({
       )}
 
       {error && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-lg border border-red-100 bg-red-50 p-3 text-xs text-red-700 shadow-sm">
+        <div role="alert" className="absolute right-0 top-full z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-[var(--danger)]/30 bg-[var(--status-danger-bg)] p-3 text-xs text-[var(--danger)] shadow-[var(--shadow-sm)]">
           {error}
         </div>
       )}

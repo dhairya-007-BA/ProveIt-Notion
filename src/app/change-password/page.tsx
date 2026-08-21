@@ -27,6 +27,10 @@ import {
 import {
   useAuth,
 } from "@/components/auth-provider";
+import { ProveItLogo } from "@/components/proveit-logo";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FormControl, controlClassName } from "@/components/ui/form-control";
 
 export default function ChangePasswordPage() {
   const router =
@@ -226,9 +230,9 @@ export default function ChangePasswordPage() {
 
   if (authLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-500">
-          Loading...
+      <main className="flex min-h-screen items-center justify-center bg-[var(--background)]">
+        <p className="text-sm text-[var(--text-muted)]">
+          Loading ProveIt Workspace…
         </p>
       </main>
     );
@@ -242,40 +246,40 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--background)] px-4 py-10">
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-48 bg-[linear-gradient(135deg,var(--info-soft),transparent_68%)]" />
+      <Card tone="raised" className="relative w-full max-w-md p-7 sm:p-8">
 
         {/* HEADER */}
 
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-semibold">
-            ProveIt
-          </h1>
+          <ProveItLogo className="mx-auto h-auto w-36" priority />
+          <h1 className="proveit-heading mt-6 text-2xl font-semibold tracking-[-0.03em]">Secure your account</h1>
 
-          <p className="mt-2 text-gray-500">
+          <p className="mt-2 text-sm text-[var(--text-muted)]">
             Create your password
           </p>
         </div>
 
         {/* EMPLOYEE */}
 
-        <div className="mb-6 rounded-lg bg-gray-50 p-4">
-          <p className="text-sm font-medium text-gray-900">
+        <div className="mb-6 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+          <p className="text-sm font-medium text-[var(--text)]">
             {profile.name}
           </p>
 
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
             Employee ID:{" "}
             {profile.employeeId}
           </p>
         </div>
 
         <div className="mb-6">
-          <h2 className="text-lg font-semibold">
+          <h2 className="proveit-heading text-base font-semibold">
             Set your new password
           </h2>
 
-          <p className="mt-2 text-sm leading-6 text-gray-500">
+          <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
             Choose a private password for
             your ProveIt account. Your
             administrator will not see
@@ -290,18 +294,9 @@ export default function ChangePasswordPage() {
 
           {/* PASSWORD */}
 
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-2 block text-sm font-medium text-gray-700"
-            >
-              New password
-            </label>
-
+          <FormControl id="password" label="New password" required helperText="Use at least 8 characters and keep it private.">
             <input
-              id="password"
               type="password"
-              required
               minLength={8}
               autoComplete="new-password"
               value={password}
@@ -311,24 +306,15 @@ export default function ChangePasswordPage() {
                 )
               }
               placeholder="At least 8 characters"
-              className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none transition focus:border-gray-400"
+              className={controlClassName}
             />
-          </div>
+          </FormControl>
 
           {/* CONFIRM PASSWORD */}
 
-          <div>
-            <label
-              htmlFor="confirmPassword"
-              className="mb-2 block text-sm font-medium text-gray-700"
-            >
-              Confirm new password
-            </label>
-
+          <FormControl id="confirmPassword" label="Confirm new password" required>
             <input
-              id="confirmPassword"
               type="password"
-              required
               minLength={8}
               autoComplete="new-password"
               value={
@@ -340,14 +326,14 @@ export default function ChangePasswordPage() {
                 )
               }
               placeholder="Enter password again"
-              className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none transition focus:border-gray-400"
+              className={controlClassName}
             />
-          </div>
+          </FormControl>
 
           {/* ERROR */}
 
           {error && (
-            <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div role="alert" className="proveit-feedback proveit-feedback-danger">
               {error}
             </div>
           )}
@@ -355,29 +341,28 @@ export default function ChangePasswordPage() {
           {/* SUCCESS */}
 
           {success && (
-            <div className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">
+            <div role="status" className="proveit-feedback proveit-feedback-success">
               {success}
             </div>
           )}
 
           {/* SUBMIT */}
 
-          <button
+          <Button
             type="submit"
-            disabled={saving}
-            className="w-full rounded-lg bg-black px-4 py-3 font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            loading={saving}
+            loadingLabel="Saving…"
+            className="w-full"
           >
-            {saving
-              ? "Saving..."
-              : "Set Password"}
-          </button>
+            Set password
+          </Button>
         </form>
 
-        <p className="mt-6 text-center text-xs leading-5 text-gray-400">
+        <p className="mt-6 text-center text-xs leading-5 text-[var(--text-muted)]">
           Your password is stored securely
           through Firebase Authentication.
         </p>
-      </div>
+      </Card>
     </main>
   );
 }

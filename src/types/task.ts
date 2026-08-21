@@ -38,6 +38,14 @@ export interface ProveItTask {
 
   parentTaskId?: string;
   meetingId?: string;
+  provenance?: {
+    type: "meeting_ai_action_item";
+    meetingId: string;
+    proposalId: string;
+    sourceTitle: string;
+    approvedBy: string;
+    approvedAt?: Date;
+  };
   customerId?: string;
 
   documentIds?: string[];

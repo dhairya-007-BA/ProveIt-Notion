@@ -9,7 +9,7 @@ import {
 
 import { User } from "firebase/auth";
 
-import { createTask } from "@/lib/tasks";
+import { createTaskOnServer } from "@/lib/task-mutation-client";
 import {
   createProveItTaskThenSyncWorkspaceKaneo,
   createTaskSubmissionGuard,
@@ -20,6 +20,9 @@ import CustomFieldProperties from "@/components/tasks/custom-field-properties";
 import { useAuth } from "@/components/auth-provider";
 import { saveTaskCustomFields } from "@/lib/task-custom-fields";
 import { type CustomFieldValue, type WorkspaceCustomField } from "@/lib/custom-fields";
+import { Button } from "@/components/ui/button";
+import { controlClassName, FieldLabel, FormControl } from "@/components/ui/form-control";
+import { TaskPriorityBadge, TaskStatusBadge } from "@/components/ui/task-metadata";
 
 import { ProveItUser } from "@/types/user";
 import {
@@ -262,7 +265,7 @@ export default function NewTaskForm({
        * together.
        */
       const result = await createProveItTaskThenSyncWorkspaceKaneo(
-        () => createTask({
+        () => createTaskOnServer(currentUser, {
           title: cleanTitle,
 
           description:
@@ -283,8 +286,6 @@ export default function NewTaskForm({
               )
             : null,
 
-          createdBy:
-            currentUser.uid,
         }),
         currentUser,
         workspaceId,
@@ -374,11 +375,7 @@ export default function NewTaskForm({
       >
         {/* TITLE */}
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-            Task title
-          </label>
-
+        <FormControl label="Task title" required>
           <input
             required
             autoFocus
@@ -390,17 +387,13 @@ export default function NewTaskForm({
               )
             }
             placeholder="Prepare investor update"
-            className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none transition hover:border-[var(--border-strong)] focus:border-[var(--secondary)]"
+            className={controlClassName}
           />
-        </div>
+        </FormControl>
 
         {/* DESCRIPTION */}
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-            Description
-          </label>
-
+        <FormControl label="Description" helperText="Add the context a teammate needs to complete this work.">
           <textarea
             value={description}
             onChange={(event) =>
@@ -410,9 +403,9 @@ export default function NewTaskForm({
             }
             rows={4}
             placeholder="Add context, requirements or notes..."
-            className="w-full resize-none rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none transition hover:border-[var(--border-strong)] focus:border-[var(--secondary)]"
+            className={`${controlClassName} resize-y`}
           />
-        </div>
+        </FormControl>
 
         {/* TASK DETAILS */}
 
@@ -421,11 +414,10 @@ export default function NewTaskForm({
           {/* STATUS */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-              Status
-            </label>
+            <div className="mb-1.5 flex items-center justify-between gap-3"><FieldLabel htmlFor="new-task-status" className="mb-0">Status</FieldLabel><TaskStatusBadge status={status} /></div>
 
             <select
+              id="new-task-status"
               aria-label="Task status"
               value={status}
               onChange={(event) =>
@@ -434,7 +426,7 @@ export default function NewTaskForm({
                     .value as TaskStatus
                 )
               }
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm"
+              className={controlClassName}
             >
               <option value="todo">
                 To do
@@ -457,11 +449,11 @@ export default function NewTaskForm({
           {/* PRIORITY */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-              Priority
-            </label>
+            <div className="mb-1.5 flex items-center justify-between gap-3"><FieldLabel htmlFor="new-task-priority" className="mb-0">Priority</FieldLabel><TaskPriorityBadge priority={priority} /></div>
 
             <select
+              id="new-task-priority"
+              aria-label="Task priority"
               value={priority}
               onChange={(event) =>
                 setPriority(
@@ -469,7 +461,7 @@ export default function NewTaskForm({
                     .value as TaskPriority
                 )
               }
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm"
+              className={controlClassName}
             >
               <option value="low">
                 Low
@@ -491,11 +483,7 @@ export default function NewTaskForm({
 
           {/* ASSIGNEE */}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-              Assignee
-            </label>
-
+          <FormControl label="Assignee" helperText={loadingEmployees ? "Loading workspace members…" : "The selected employee will receive an assignment notification."}>
             <select
               value={assigneeId}
               disabled={
@@ -506,7 +494,7 @@ export default function NewTaskForm({
                   event.target.value
                 )
               }
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm disabled:opacity-60"
+              className={`${controlClassName} disabled:cursor-not-allowed disabled:opacity-60`}
             >
               <option value="">
                 {loadingEmployees
@@ -532,15 +520,11 @@ export default function NewTaskForm({
                 )
               )}
             </select>
-          </div>
+          </FormControl>
 
           {/* DUE DATE */}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-              Due date
-            </label>
-
+          <FormControl label="Due date">
             <input
               type="date"
               value={dueDate}
@@ -549,16 +533,16 @@ export default function NewTaskForm({
                   event.target.value
                 )
               }
-              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none focus:border-[var(--secondary)]"
+              className={controlClassName}
             />
-          </div>
+          </FormControl>
         </div>
 
         <CustomFieldProperties workspaceId={workspaceId} values={customFields} onChange={setCustomFields} people={employees} onFieldsLoaded={setCustomDefinitions} canManage={workspaceCanManageProperties || profile?.group === "bod" || profile?.capabilities?.manageWorkspaces === true} />
 
         {/* ASSIGNMENT INFO */}
 
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 py-3">
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] px-4 py-3">
           <p className="text-sm text-[var(--muted)]">
             {assigneeId
               ? "This task will be assigned to the selected employee."
@@ -577,26 +561,23 @@ export default function NewTaskForm({
         {/* ACTIONS */}
 
         <div className="mt-auto flex justify-end gap-3 border-t border-[var(--border)] pt-5">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             disabled={loading}
             onClick={onCancel}
-            className="proveit-secondary-button disabled:opacity-50"
           >
             Cancel
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="submit"
-            disabled={loading || taskCreated}
-            className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50"
+            loading={loading}
+            loadingLabel="Creating…"
+            disabled={taskCreated}
           >
-            {loading
-              ? "Creating..."
-              : taskCreated
-                ? "Task created"
-                : "Create task"}
-          </button>
+            {taskCreated ? "Task created" : "Create task"}
+          </Button>
         </div>
       </form>
     </div>

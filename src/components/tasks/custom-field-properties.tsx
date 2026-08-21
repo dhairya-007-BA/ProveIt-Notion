@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { collection, getDocs, query as firestoreQuery, where } from "firebase/firestore";
 import { useAuth } from "@/components/auth-provider";
 import { authenticatedRequest } from "@/lib/authenticated-request";
 import { CUSTOM_FIELD_TYPES, type CustomFieldType, type CustomFieldValue, type WorkspaceCustomField } from "@/lib/custom-fields";
 import { type ProveItUser } from "@/types/user";
+import { db } from "@/lib/firebase";
 
 type Props = { workspaceId: string; values: Record<string, CustomFieldValue>; onChange: (next: Record<string, CustomFieldValue>) => void; people: ProveItUser[]; onFieldsLoaded?: (fields: WorkspaceCustomField[]) => void; compact?: boolean; canManage?: boolean; onPersist?: (next: Record<string, CustomFieldValue>) => Promise<boolean> };
 const labels: Record<CustomFieldType, string> = { text: "Text", number: "Number", date: "Date", checkbox: "Checkbox", single_select: "Single select", multi_select: "Multi select", url: "URL", person: "Person" };
@@ -17,7 +19,7 @@ export default function CustomFieldProperties({ workspaceId, values, onChange, p
   const { firebaseUser } = useAuth();
   const [fields, setFields] = useState<WorkspaceCustomField[]>([]); const [adding, setAdding] = useState(false); const [query, setQuery] = useState(""); const [creating, setCreating] = useState(false); const [saving, setSaving] = useState(false); const [editing, setEditing] = useState<string | null>(null); const [error, setError] = useState("");
   const [draft, setDraft] = useState({ name: "", type: "text" as CustomFieldType, description: "", required: false, options: "" });
-  useEffect(() => { let live = true; async function load() { if (!firebaseUser) return; try { const response = await authenticatedRequest(firebaseUser, `/api/workspaces/${workspaceId}/custom-fields`); const body = await response.json().catch(() => null) as { fields?: WorkspaceCustomField[]; code?: string } | null; if (!response.ok || !Array.isArray(body?.fields)) { console.info("Task property load failed", { status: response.status, code: body?.code ?? "custom_fields_invalid_response" }); throw new Error("fields"); } const active = body.fields.filter((field) => field.active !== false).sort((a, b) => a.position - b.position); if (live) { setFields(active); onFieldsLoaded?.(active); } } catch { if (live) setError("Properties could not be loaded."); } } void load(); return () => { live = false; }; }, [firebaseUser, onFieldsLoaded, workspaceId]);
+  useEffect(() => { let live = true; async function load() { if (!firebaseUser) return; try { let loaded: WorkspaceCustomField[]; const response = await authenticatedRequest(firebaseUser, `/api/workspaces/${workspaceId}/custom-fields`); const body = await response.json().catch(() => null) as { fields?: WorkspaceCustomField[]; code?: string } | null; if (response.ok && Array.isArray(body?.fields)) loaded = body.fields; else { console.info("Task property server load failed; using the rules-protected client read", { status: response.status, code: body?.code ?? "custom_fields_invalid_response" }); const snapshot = await getDocs(firestoreQuery(collection(db, "workspaceCustomFields"), where("workspaceId", "==", workspaceId))); loaded = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as WorkspaceCustomField)); } const active = loaded.filter((field) => field.active !== false).sort((a, b) => a.position - b.position); if (live) { setFields(active); setError(""); onFieldsLoaded?.(active); } } catch { if (live) setError("Properties could not be loaded."); } } void load(); return () => { live = false; }; }, [firebaseUser, onFieldsLoaded, workspaceId]);
   const visible = compact ? fields.filter((field) => field.required || hasValue(values[field.id]) || field.id === editing) : fields;
   const available = useMemo(() => fields.filter((field) => !visible.some((shown) => shown.id === field.id) && field.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [fields, query, visible]);
   async function set(id: string, value: CustomFieldValue) { const next = { ...values, [id]: value }; onChange(next); if (onPersist) { setSaving(true); const okay = await onPersist(next); setSaving(false); if (!okay) setError("Property value could not be saved."); } }

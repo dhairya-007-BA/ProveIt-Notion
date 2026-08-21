@@ -21,8 +21,11 @@ const mocks = vi.hoisted(() => {
 });
 
 const requireCustomFieldWorkspaceUser = vi.hoisted(() => vi.fn());
+const prepareCanonicalNotification = vi.hoisted(() => vi.fn(async (event: { eventId: string }) => ({ event, notification: { id: event.eventId, data: { canonical: true } }, email: null })));
+const deliverPreparedCanonicalNotification = vi.hoisted(() => vi.fn(async () => ({ status: "suppressed" })));
+const dispatchCanonicalNotification = vi.hoisted(() => vi.fn(async () => ({ notificationCreated: true, email: { status: "suppressed" } })));
 
-vi.mock("firebase-admin/firestore", () => ({ FieldValue: { serverTimestamp: () => "server-time" } }));
+vi.mock("firebase-admin/firestore", () => ({ FieldValue: { serverTimestamp: () => "server-time", arrayUnion: (...values: unknown[]) => ({ arrayUnion: values }) } }));
 vi.mock("@/lib/firebase-admin", () => ({
   adminDb: {
     collection: mocks.collection,
@@ -35,8 +38,9 @@ vi.mock("@/lib/custom-field-route-auth", () => ({
     constructor(message: string, public status: number) { super(message); }
   },
 }));
+vi.mock("@/lib/notification-service", () => ({ prepareCanonicalNotification, deliverPreparedCanonicalNotification, dispatchCanonicalNotification }));
 
-import { createComment, deleteComment } from "@/lib/comment-service";
+import { createComment, deleteComment, updateComment } from "@/lib/comment-service";
 
 function snapshot(path: string, data: Record<string, unknown>) {
   const ref = { update: mocks.directUpdate, delete: mocks.directDelete };
@@ -86,5 +90,30 @@ describe("comment service security invariants", () => {
 
     expect(mocks.directDelete).not.toHaveBeenCalled();
     expect(mocks.directUpdate).toHaveBeenCalledWith(expect.objectContaining({ body: "", deletedAt: "server-time" }));
+  });
+
+  it("never replays a mention notification after the same recipient was previously notified", async () => {
+    snapshot("comments/comment-1", {
+      workspaceId: "company", entityType: "task", entityId: "task-1", authorUid: "actor",
+      mentionedUserIds: [], notifiedMentionUserIds: ["recipient"],
+    });
+    await updateComment(new Request("http://local"), "company", "comment-1", "@Recipient User please review again.", ["recipient"]);
+    expect(prepareCanonicalNotification).not.toHaveBeenCalled();
+    expect(dispatchCanonicalNotification).not.toHaveBeenCalled();
+    expect(mocks.batchSet).not.toHaveBeenCalled();
+    expect(mocks.batchUpdate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      notifiedMentionUserIds: ["recipient"],
+    }));
+  });
+
+  it("routes legacy mention replays through create-if-absent dispatch instead of overwriting canonical state", async () => {
+    snapshot("comments/comment-legacy", {
+      workspaceId: "company", entityType: "task", entityId: "task-1", authorUid: "actor", mentionedUserIds: [],
+    });
+    dispatchCanonicalNotification.mockResolvedValueOnce({ notificationCreated: false, email: { status: "duplicate" } });
+    await updateComment(new Request("http://local"), "company", "comment-legacy", "@Recipient User please review again.", ["recipient"]);
+    expect(dispatchCanonicalNotification).toHaveBeenCalledWith(expect.objectContaining({ eventId: "mention_comment-legacy_recipient" }));
+    expect(mocks.batchSet).not.toHaveBeenCalled();
+    expect(mocks.directUpdate).toHaveBeenCalledWith({ notifiedMentionUserIds: { arrayUnion: ["recipient"] } });
   });
 });

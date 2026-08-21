@@ -31,3 +31,8 @@ export function ProveItLogo({
     </span>
   );
 }
+
+/** Compact mark derived from the magnifier/check in the canonical wordmark. */
+export function ProveItMark({ className = "h-8 w-8" }: { className?: string }) {
+  return <svg aria-hidden="true" viewBox="0 0 40 40" className={className} fill="none"><circle cx="17" cy="17" r="11.5" stroke="var(--brand-primary)" strokeWidth="5" /><path d="m25.5 25.5 9 9" stroke="var(--brand-primary)" strokeWidth="5" strokeLinecap="round" /><path d="m11.5 17 4 4 7-8" stroke="var(--brand-secondary)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}

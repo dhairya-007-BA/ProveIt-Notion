@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 
 import Sidebar from "@/components/sidebar";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAuth } from "@/components/auth-provider";
 import { db } from "@/lib/firebase";
 
@@ -309,8 +310,8 @@ export default function DatabasesPage() {
     loading
   ) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-500">
+      <main className="flex min-h-screen items-center justify-center bg-[var(--background)]">
+        <p className="text-sm text-[var(--muted)]">
           Loading databases...
         </p>
       </main>
@@ -352,7 +353,7 @@ export default function DatabasesPage() {
                 Databases
               </h1>
 
-              <p className="mt-2 text-sm text-[#787774]">
+              <p className="mt-2 text-sm text-[var(--muted)]">
                 Create databases to organize structured information.
               </p>
             </div>
@@ -375,7 +376,7 @@ export default function DatabasesPage() {
           {/* ERROR */}
 
           {error && (
-            <div className="mb-6 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+            <div role="alert" className="mb-6 rounded-xl border border-[var(--danger)]/30 bg-[var(--status-danger-bg)] p-4 text-sm text-[var(--danger)]">
               {error}
             </div>
           )}
@@ -389,15 +390,13 @@ export default function DatabasesPage() {
 
               <div className="px-6 py-20 text-center">
 
-                <div className="text-4xl">
-                  ▦
-                </div>
+                <div className="mx-auto grid h-10 w-10 place-items-center text-[var(--brand-primary)]"><DatabaseIcon /></div>
 
-                <h2 className="mt-4 font-semibold text-gray-900">
+                <h2 className="mt-4 font-semibold text-[var(--foreground)]">
                   No databases yet
                 </h2>
 
-                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-500">
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">
                   Create a database to track projects,
                   candidates, investors, tasks, expenses,
                   or any other structured information.
@@ -409,7 +408,7 @@ export default function DatabasesPage() {
                   onClick={
                     createDatabase
                   }
-                  className="mt-6 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                  className="proveit-secondary-button mt-6 disabled:opacity-50"
                 >
                   Create database
                 </button>
@@ -425,27 +424,27 @@ export default function DatabasesPage() {
                     key={
                       database.id
                     }
-                    className="proveit-list-row group flex items-center border-b border-black/[0.08] last:border-b-0"
+                    className="proveit-list-row group flex flex-col border-b border-[var(--border)] last:border-b-0 sm:flex-row sm:items-center"
                   >
 
                     <Link
                       href={`/workspaces/${workspaceId}/databases/${database.id}`}
-                      className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3"
+                      className="flex w-full min-w-0 flex-1 items-center gap-3 px-4 py-3.5"
                     >
 
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--sidebar)] text-base">
-                        ▦
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--info-soft)] text-[var(--info)]">
+                        <DatabaseIcon />
                       </div>
 
                       <div className="min-w-0">
 
-                        <p className="truncate text-sm font-medium text-[#37352f]">
+                        <p className="truncate text-sm font-medium text-[var(--foreground)]">
                           {
                             database.name
                           }
                         </p>
 
-                        <p className="mt-0.5 text-xs text-[#9b9a97]">
+                        <p className="mt-0.5 text-xs text-[var(--subtle)]">
                           {database.updatedAt
                             ? `Updated ${database.updatedAt.toLocaleDateString()}`
                             : "No update date"}
@@ -455,7 +454,7 @@ export default function DatabasesPage() {
 
                     </Link>
 
-                    <div className="flex items-center gap-3 px-4">
+                    <div className="flex w-full items-center justify-end gap-3 border-t border-[var(--border)] px-4 py-2 sm:w-auto sm:border-0 sm:py-0">
 
                       <button
                         type="button"
@@ -463,20 +462,23 @@ export default function DatabasesPage() {
                           deletingId ===
                           database.id
                         }
-                onClick={() => setDatabasePendingDeletion(database)}
-                        className="text-xs text-gray-400 transition hover:text-red-600 disabled:opacity-50"
+                        onClick={() => setDatabasePendingDeletion(database)}
+                        aria-label={`Delete ${database.name}`}
+                        title="Delete database"
+                        className="grid h-10 w-10 place-items-center rounded-md text-[var(--muted)] transition hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:opacity-50"
                       >
                         {deletingId ===
                         database.id
-                          ? "Deleting..."
-                          : "Delete"}
+                          ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"><span className="sr-only">Deleting</span></span>
+                          : <TrashIcon />}
                       </button>
 
                       <Link
                         href={`/workspaces/${workspaceId}/databases/${database.id}`}
-                        className="text-sm text-gray-300"
+                        aria-label={`Open ${database.name}`}
+                        className="grid min-h-10 min-w-10 place-items-center rounded-md text-sm text-[var(--subtle)] hover:bg-[var(--hover)] hover:text-[var(--secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
                       >
-                        →
+                        <ArrowIcon />
                       </Link>
 
                     </div>
@@ -492,7 +494,11 @@ export default function DatabasesPage() {
 
         </div>
       </section>
-      {databasePendingDeletion && <div role="dialog" aria-modal="true" aria-label="Delete database" className="fixed inset-0 z-50 grid place-items-center bg-black/35 p-4"><section className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-6 shadow-[var(--shadow-md)]"><h2 className="proveit-section-title">Delete “{databasePendingDeletion.name}”?</h2><p className="mt-2 text-sm text-[var(--muted)]">This cannot be undone.</p><div className="mt-6 flex justify-end gap-3"><button type="button" className="proveit-secondary-button" onClick={() => setDatabasePendingDeletion(null)}>Cancel</button><button type="button" className="rounded-lg bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white" onClick={() => { const database = databasePendingDeletion; setDatabasePendingDeletion(null); void removeDatabase(database.id); }}>Delete database</button></div></section></div>}
+      <ConfirmDialog open={Boolean(databasePendingDeletion)} title="Delete database?" description={databasePendingDeletion ? `“${databasePendingDeletion.name}” will be permanently deleted. This cannot be undone.` : ""} confirmLabel="Delete database" loading={Boolean(deletingId)} onCancel={() => setDatabasePendingDeletion(null)} onConfirm={() => { if (databasePendingDeletion) void removeDatabase(databasePendingDeletion.id); }} />
     </main>
   );
 }
+
+function DatabaseIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-[1.8]"><ellipse cx="12" cy="6" rx="6.5" ry="2.8" /><path d="M5.5 6v6c0 1.5 2.9 2.8 6.5 2.8s6.5-1.3 6.5-2.8V6M5.5 12v6c0 1.5 2.9 2.8 6.5 2.8s6.5-1.3 6.5-2.8v-6" /></svg>; }
+function TrashIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-[1.8]"><path d="M5 7h14M9 7V4.5h6V7m2 0-.7 13h-8.6L7 7m3.5 4v5.5m3-5.5v5.5" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
+function ArrowIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2"><path d="M5 12h13m-5-5 5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>; }

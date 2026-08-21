@@ -22,6 +22,10 @@ import CustomFieldProperties from "@/components/tasks/custom-field-properties";
 import { saveTaskCustomFields } from "@/lib/task-custom-fields";
 import { syncWorkspaceTaskDelete, syncWorkspaceTaskUpdate } from "@/lib/kaneo-business-task-update-sync";
 import { type CustomFieldValue } from "@/lib/custom-fields";
+import { updateTaskAssigneeOnServer } from "@/lib/task-mutation-client";
+import { Button } from "@/components/ui/button";
+import { controlClassName, FieldLabel, FormControl } from "@/components/ui/form-control";
+import { TaskPriorityBadge, TaskStatusBadge } from "@/components/ui/task-metadata";
 
 import { ProveItUser } from "@/types/user";
 
@@ -296,9 +300,6 @@ export default function EditTaskForm({
 
           priority,
 
-          assigneeId:
-            assigneeId || null,
-
           dueDate: dueDate
             ? Timestamp.fromDate(
                 new Date(
@@ -311,6 +312,14 @@ export default function EditTaskForm({
             serverTimestamp(),
         }
       );
+
+      if (!firebaseUser) throw new Error("Authentication required.");
+      try {
+        const assignment = await updateTaskAssigneeOnServer(firebaseUser, task.workspaceId, task.id, assigneeId || null);
+        if (assignment.notificationWarning) setError("Task saved, and its assignment notification is queued for retry.");
+      } catch {
+        setError("Task details were saved, but its assignment could not be updated.");
+      }
 
       if (firebaseUser) {
         const fields = (["title", "description", "status", "priority"] as const).filter((field) => task[field] !== ({ title: cleanTitle, description: description.trim(), status, priority } as typeof task)[field]);
@@ -417,15 +426,13 @@ export default function EditTaskForm({
 
       <form
         onSubmit={handleSubmit}
+        role="region"
+        aria-label="Task properties"
         className="mt-6 space-y-5"
       >
         {/* TITLE */}
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-            Task title
-          </label>
-
+        <FormControl label="Task title" required>
           <input
             required
             autoFocus
@@ -437,19 +444,15 @@ export default function EditTaskForm({
                 event.target.value
               )
             }
-            className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-[var(--secondary)] disabled:opacity-60"
+            className={`${controlClassName} disabled:cursor-not-allowed disabled:opacity-60`}
           />
-        </div>
+        </FormControl>
 
         <CustomFieldProperties workspaceId={task.workspaceId} values={customFields} onChange={setCustomFields} people={employees} compact canManage={workspaceCanManageProperties || profile?.group === "bod" || profile?.capabilities?.manageWorkspaces === true} onPersist={async (next) => firebaseUser ? saveTaskCustomFields(firebaseUser, task.id, next) : false} />
 
         {/* DESCRIPTION */}
 
-        <div>
-          <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-            Description
-          </label>
-
+        <FormControl label="Description" helperText="Add the context a teammate needs to complete this work.">
           <textarea
             rows={4}
             value={description}
@@ -459,9 +462,9 @@ export default function EditTaskForm({
                 event.target.value
               )
             }
-            className="w-full resize-none rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-[var(--secondary)] disabled:opacity-60"
+            className={`${controlClassName} resize-y disabled:cursor-not-allowed disabled:opacity-60`}
           />
-        </div>
+        </FormControl>
 
         {/* DETAILS */}
 
@@ -470,11 +473,10 @@ export default function EditTaskForm({
           {/* STATUS */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-              Status
-            </label>
+            <div className="mb-1.5 flex items-center justify-between gap-3"><FieldLabel htmlFor={`task-status-${task.id}`} className="mb-0">Status</FieldLabel><TaskStatusBadge status={status} /></div>
 
             <select
+              id={`task-status-${task.id}`}
               aria-label="Task status"
               value={status}
               disabled={busy}
@@ -484,7 +486,7 @@ export default function EditTaskForm({
                     .value as EditableTaskStatus
                 )
               }
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm disabled:opacity-60"
+              className={`${controlClassName} disabled:cursor-not-allowed disabled:opacity-60`}
             >
               <option value="todo">
                 To do
@@ -507,11 +509,11 @@ export default function EditTaskForm({
           {/* PRIORITY */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-              Priority
-            </label>
+            <div className="mb-1.5 flex items-center justify-between gap-3"><FieldLabel htmlFor={`task-priority-${task.id}`} className="mb-0">Priority</FieldLabel><TaskPriorityBadge priority={priority} /></div>
 
             <select
+              id={`task-priority-${task.id}`}
+              aria-label="Task priority"
               value={priority}
               disabled={busy}
               onChange={(event) =>
@@ -520,7 +522,7 @@ export default function EditTaskForm({
                     .value as EditableTaskPriority
                 )
               }
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm disabled:opacity-60"
+              className={`${controlClassName} disabled:cursor-not-allowed disabled:opacity-60`}
             >
               <option value="low">
                 Low
@@ -542,11 +544,7 @@ export default function EditTaskForm({
 
           {/* ASSIGNEE */}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-              Assignee
-            </label>
-
+          <FormControl label="Assignee" helperText={loadingEmployees ? "Loading workspace members…" : "Assignment changes notify the selected employee."}>
             <select
               value={assigneeId}
               disabled={
@@ -558,7 +556,7 @@ export default function EditTaskForm({
                   event.target.value
                 )
               }
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm disabled:opacity-60"
+              className={`${controlClassName} disabled:cursor-not-allowed disabled:opacity-60`}
             >
               <option value="">
                 {loadingEmployees
@@ -584,15 +582,11 @@ export default function EditTaskForm({
                 )
               )}
             </select>
-          </div>
+          </FormControl>
 
           {/* DUE DATE */}
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-[var(--text)]">
-              Due date
-            </label>
-
+          <FormControl label="Due date">
             <input
               type="date"
               value={dueDate}
@@ -602,9 +596,9 @@ export default function EditTaskForm({
                   event.target.value
                 )
               }
-              className="w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2.5 text-sm outline-none focus:border-[var(--secondary)] disabled:opacity-60"
+              className={`${controlClassName} disabled:cursor-not-allowed disabled:opacity-60`}
             />
-          </div>
+          </FormControl>
         </div>
 
         {/* ERROR */}
@@ -622,41 +616,41 @@ export default function EditTaskForm({
             <p className="text-sm font-medium">Delete this task permanently?</p>
             <p className="mt-1 text-sm text-[var(--muted)]">This action cannot be undone.</p>
             <div className="mt-3 flex gap-2">
-              <button type="button" disabled={busy} onClick={handleDelete} className="rounded-lg bg-[var(--danger)] px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{deleting ? "Deleting…" : "Delete permanently"}</button>
-              <button type="button" disabled={busy} onClick={() => setConfirmingDelete(false)} className="proveit-secondary-button disabled:opacity-50">Keep task</button>
+              <Button type="button" variant="danger" loading={deleting} loadingLabel="Deleting…" disabled={busy} onClick={handleDelete}>Delete permanently</Button>
+              <Button type="button" variant="secondary" disabled={busy} onClick={() => setConfirmingDelete(false)}>Keep task</Button>
             </div>
           </div>
         )}
 
         <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             disabled={busy}
             onClick={() => setConfirmingDelete(true)}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-[var(--danger)] hover:bg-[var(--hover)] disabled:opacity-50"
+            className="text-[var(--danger)] hover:bg-[var(--danger-soft)]"
           >
             Delete task
-          </button>
+          </Button>
 
           <div className="flex justify-end gap-3">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               disabled={busy}
               onClick={onCancel}
-              className="proveit-secondary-button disabled:opacity-50"
             >
               Cancel
-            </button>
+            </Button>
 
-            <button
+            <Button
               type="submit"
-              disabled={busy}
-              className="proveit-primary-button disabled:cursor-not-allowed disabled:opacity-50"
+              loading={saving}
+              loadingLabel="Saving…"
+              disabled={deleting}
             >
-              {saving
-                ? "Saving..."
-                : "Save changes"}
-            </button>
+              Save changes
+            </Button>
           </div>
         </div>
       </form>

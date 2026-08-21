@@ -24,6 +24,9 @@ import {
   db,
 } from "@/lib/firebase";
 import { ProveItLogo } from "@/components/proveit-logo";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FormControl, controlClassName } from "@/components/ui/form-control";
 
 function employeeIdToEmail(
   employeeId: string
@@ -182,16 +185,17 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#fbfbfa] px-4 py-10">
-      <div className="w-full max-w-sm rounded-xl border border-black/[0.12] bg-white p-8 shadow-[0_12px_40px_rgba(55,53,47,0.08)]">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--background)] px-4 py-10">
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-48 bg-[linear-gradient(135deg,var(--info-soft),transparent_68%)]" />
+      <Card tone="raised" className="relative w-full max-w-sm p-7 sm:p-8">
 
         {/* HEADER */}
 
         <div className="mb-8 text-center">
-          <ProveItLogo className="mx-auto h-12 w-12" priority />
-          <h1 className="mt-4 text-2xl font-semibold tracking-[-0.03em]">ProveIt</h1>
+          <ProveItLogo className="mx-auto h-auto w-36" priority />
+          <h1 className="proveit-heading mt-6 text-2xl font-semibold tracking-[-0.03em]">Welcome back</h1>
 
-          <p className="mt-1 text-sm text-[#787774]">Sign in to your workspace</p>
+          <p className="mt-1.5 text-sm text-[var(--text-muted)]">Sign in to ProveIt Workspace</p>
         </div>
 
         {/* LOGIN FORM */}
@@ -203,18 +207,9 @@ export default function LoginPage() {
 
           {/* EMPLOYEE ID */}
 
-          <div>
-            <label
-              htmlFor="employeeId"
-              className="mb-1.5 block text-sm font-medium text-[#37352f]"
-            >
-              Employee ID
-            </label>
-
+          <FormControl id="employeeId" label="Employee ID" required>
             <input
-              id="employeeId"
               type="text"
-              required
               autoComplete="username"
               value={employeeId}
               onChange={(event) =>
@@ -223,24 +218,15 @@ export default function LoginPage() {
                 )
               }
               placeholder="Enter your employee ID"
-              className="w-full rounded-md border border-black/[0.15] px-3 py-2.5 text-sm outline-none transition focus:border-[#787774] focus:ring-2 focus:ring-black/[0.06]"
+              className={controlClassName}
             />
-          </div>
+          </FormControl>
 
           {/* PASSWORD */}
 
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1.5 block text-sm font-medium text-[#37352f]"
-            >
-              Password
-            </label>
-
+          <FormControl id="password" label="Password" required>
             <input
-              id="password"
               type="password"
-              required
               autoComplete="current-password"
               value={password}
               onChange={(event) =>
@@ -248,35 +234,34 @@ export default function LoginPage() {
                   event.target.value
                 )
               }
-              className="w-full rounded-md border border-black/[0.15] px-3 py-2.5 text-sm outline-none transition focus:border-[#787774] focus:ring-2 focus:ring-black/[0.06]"
+              className={controlClassName}
             />
-          </div>
+          </FormControl>
 
           {/* ERROR */}
 
           {error && (
-            <div className="rounded-md bg-red-50 px-3 py-2.5 text-sm text-red-700">
+            <div role="alert" className="proveit-feedback proveit-feedback-danger">
               {error}
             </div>
           )}
 
           {/* SIGN IN */}
 
-          <button
+          <Button
             type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-[#252525] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+            loading={loading}
+            loadingLabel="Signing in…"
+            className="w-full"
           >
-            {loading
-              ? "Signing in..."
-              : "Sign In"}
-          </button>
+            Sign in
+          </Button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-[#9b9a97]">
+        <p className="mt-6 text-center text-xs text-[var(--text-muted)]">
           ProveIt Hiring Innovations
         </p>
-      </div>
+      </Card>
     </main>
   );
 }

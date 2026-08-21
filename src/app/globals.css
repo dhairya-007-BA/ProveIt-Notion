@@ -1,15 +1,28 @@
 @import "tailwindcss";
 
 :root {
+  /* ProveIt brand: the product logo is the source of truth. Blue leads
+     interaction, teal supports it, and orange is a restrained accent. */
+  --brand-primary: #0577b0;
+  --brand-primary-strong: #045f8d;
+  --brand-secondary: #03625c;
+  --brand-accent: #bf6d21;
+  --on-brand-primary: #ffffff;
+
   --text: #212a31;
-  --background: #FAFAFA;
-  --primary: #bf6d21;
-  --secondary: #0577b0;
-  --accent: #03625c;
+  --text-muted: #5a6871;
+  --text-subtle: #66747c;
+  --background: #fafafa;
+  --primary: var(--brand-primary);
+  --secondary: var(--brand-primary);
+  --accent: var(--brand-secondary);
   --foreground: var(--text);
   --surface: #ffffff;
-  --surface-elevated: #ffffff;
-  --surface-muted: #f3f5f5;
+  --surface-raised: #ffffff;
+  --surface-subtle: #f3f5f5;
+  --surface-elevated: var(--surface-raised);
+  --surface-muted: var(--surface-subtle);
+  --muted-surface: var(--surface-subtle);
   --input: #ffffff;
   --sidebar: #f6f7f7;
   --hover: #edf3f5;
@@ -17,11 +30,11 @@
   --selected: #e3f1f7;
   --border: rgba(33, 42, 49, 0.14);
   --border-strong: rgba(33, 42, 49, 0.25);
-  --muted: #5a6871;
-  --subtle: #77858d;
-  --accent-proveit-blue: var(--secondary);
-  --accent-teal: var(--accent);
-  --accent-orange: var(--primary);
+  --muted: var(--text-muted);
+  --subtle: var(--text-subtle);
+  --accent-proveit-blue: var(--brand-primary);
+  --accent-teal: var(--brand-secondary);
+  --accent-orange: var(--brand-accent);
   --accent-charcoal: var(--text);
   --tag-gray-bg: #eef1f5;
   --tag-gray-fg: #4d5560;
@@ -32,7 +45,7 @@
   --tag-green-bg: #e4f4e8;
   --tag-green-fg: #237a42;
   --tag-yellow-bg: #fff3cc;
-  --tag-yellow-fg: #956a00;
+  --tag-yellow-fg: #805d16;
   --tag-orange-bg: #fff0df;
   --tag-orange-fg: #b45309;
   --tag-red-bg: #fce8e7;
@@ -41,9 +54,15 @@
   --tag-purple-fg: #7046a4;
   --tag-pink-bg: #fce8f1;
   --tag-pink-fg: #ad3d72;
-  --danger: #d44c47;
-  --success: var(--accent);
+  --danger: #b93d38;
+  --on-danger: #ffffff;
+  --danger-soft: #f9e8e7;
+  --success: #237a42;
+  --success-soft: #e4f4e8;
   --warning: #956a00;
+  --warning-soft: #fbf2dd;
+  --info: var(--brand-primary);
+  --info-soft: #e5f0fb;
   --focus: var(--secondary);
   --status-neutral-bg: #eef1f5;
   --status-neutral-fg: #455468;
@@ -53,20 +72,35 @@
   --status-warning-fg: #805d16;
   --status-danger-bg: #f9e8e7;
   --status-danger-fg: #9a3731;
+  --status-success-bg: var(--success-soft);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --control-height: 2.5rem;
   --shadow-sm: 0 1px 2px rgba(28, 28, 26, 0.04), 0 1px 3px rgba(28, 28, 26, 0.03);
   --shadow-md: 0 12px 30px rgba(28, 28, 26, 0.08), 0 2px 8px rgba(28, 28, 26, 0.04);
 }
 
 :root[data-theme="dark"] {
+    --brand-primary: #99ddff;
+    --brand-primary-strong: #66c8f4;
+    --brand-secondary: #41d2c9;
+    --brand-accent: #d9873a;
+    --on-brand-primary: #102a36;
     --text: #ced7de;
+    --text-muted: #a6b4b9;
+    --text-subtle: #93a2a8;
     --background: #262c27;
-    --primary: #d9873a;
-    --secondary: #99ddff;
-    --accent: #41d2c9;
+    --primary: var(--brand-primary);
+    --secondary: var(--brand-primary);
+    --accent: var(--brand-secondary);
     --foreground: var(--text);
     --surface: #303832;
-    --surface-elevated: #374139;
-    --surface-muted: #29312c;
+    --surface-raised: #374139;
+    --surface-subtle: #29312c;
+    --surface-elevated: var(--surface-raised);
+    --surface-muted: var(--surface-subtle);
+    --muted-surface: var(--surface-subtle);
     --input: #2d3530;
     --sidebar: #202622;
     --hover: #39443d;
@@ -74,17 +108,24 @@
     --selected: #193f49;
     --border: rgba(206, 215, 222, 0.17);
     --border-strong: rgba(206, 215, 222, 0.29);
-    --muted: #a6b4b9;
-    --subtle: #849399;
+    --muted: var(--text-muted);
+    --subtle: var(--text-subtle);
     --danger: #f2aaa5;
-    --success: var(--accent);
+    --on-danger: #351716;
+    --danger-soft: #5a302f;
+    --success: #a9e5be;
+    --success-soft: #244b36;
     --warning: #f1d36e;
+    --warning-soft: #54451f;
+    --info: var(--brand-primary);
+    --info-soft: #174c60;
     --status-neutral-bg: #3a464a;
     --status-neutral-fg: #ced7de;
     --status-warning-bg: #54451f;
     --status-warning-fg: #f1d36e;
     --status-danger-bg: #5a302f;
     --status-danger-fg: #f2aaa5;
+    --status-success-bg: var(--success-soft);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24), 0 1px 4px rgba(0, 0, 0, 0.12);
     --shadow-md: 0 14px 34px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.2);
     --tag-gray-bg: #3a464a;
@@ -118,14 +159,11 @@ body {
   transition: background-color 180ms ease, color 180ms ease;
 }
 
-body,
-aside,
-header,
-section,
 input,
 select,
 textarea,
-button {
+button,
+a {
   transition-property: background-color, border-color, color, box-shadow;
   transition-duration: 180ms;
   transition-timing-function: ease;
@@ -133,14 +171,16 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   body,
-  aside,
-  header,
-  section,
   input,
   select,
   textarea,
-  button {
+  button,
+  a {
     transition-duration: 0.01ms;
+  }
+
+  .animate-spin {
+    animation: none !important;
   }
 }
 
@@ -175,7 +215,7 @@ a:focus-visible {
 .proveit-card {
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
 }
 
@@ -216,10 +256,10 @@ a:focus-visible {
 
 .proveit-page-title {
   font-family: var(--font-montserrat), Arial, Helvetica, sans-serif;
-  font-size: clamp(2.125rem, 3vw, 3rem);
-  font-weight: 670;
-  letter-spacing: -0.045em;
-  line-height: 1;
+  font-size: clamp(2rem, 3vw, 2.5rem);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
 }
 
 .proveit-section-title {
@@ -239,12 +279,12 @@ a:focus-visible {
 
 .proveit-primary-button {
   display: inline-flex;
-  min-height: 2.5rem;
+  min-height: var(--control-height);
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: var(--primary);
-  color: white;
+  border-radius: var(--radius-md);
+  background: var(--brand-primary);
+  color: var(--on-brand-primary);
   font-size: 0.875rem;
   font-weight: 580;
   padding: 0.55rem 0.9rem;
@@ -253,7 +293,7 @@ a:focus-visible {
 }
 
 .proveit-primary-button:hover {
-  background: color-mix(in srgb, var(--primary), var(--text) 16%);
+  background: var(--brand-primary-strong);
   box-shadow: 0 3px 8px rgba(17, 24, 39, 0.2);
 }
 
@@ -263,11 +303,11 @@ a:focus-visible {
 
 .proveit-secondary-button {
   display: inline-flex;
-  min-height: 2.5rem;
+  min-height: var(--control-height);
   align-items: center;
   justify-content: center;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--muted);
   font-size: 0.875rem;
   padding: 0.55rem 0.8rem;
@@ -290,7 +330,7 @@ a:focus-visible {
 .proveit-list {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
@@ -396,6 +436,22 @@ a:focus-visible {
   line-height: 1;
 }
 
+.proveit-status-badge svg,
+.proveit-priority svg {
+  height: 0.75rem;
+  width: 0.75rem;
+  flex: none;
+}
+
+.proveit-task-status-todo { background: var(--info-soft); color: var(--info); }
+.proveit-task-status-in-progress { background: color-mix(in srgb, var(--brand-primary), transparent 84%); color: var(--brand-primary-strong); }
+.proveit-task-status-blocked { background: var(--danger-soft); color: var(--danger); }
+.proveit-task-status-done { background: var(--success-soft); color: var(--success); }
+.proveit-task-status-accent-todo { border-left-color: var(--info); background: color-mix(in srgb, var(--info-soft), transparent 28%); }
+.proveit-task-status-accent-in_progress { border-left-color: var(--brand-primary-strong); background: color-mix(in srgb, var(--brand-primary), transparent 88%); }
+.proveit-task-status-accent-blocked { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger-soft), transparent 20%); }
+.proveit-task-status-accent-done { border-left-color: var(--success); background: color-mix(in srgb, var(--success-soft), transparent 20%); }
+
 .proveit-status-scheduled { background: var(--status-neutral-bg); color: var(--status-neutral-fg); }
 .proveit-status-in_progress { background: var(--status-warning-bg); color: var(--status-warning-fg); }
 .proveit-status-completed { background: var(--status-positive-bg); color: var(--status-positive-fg); }
@@ -403,14 +459,76 @@ a:focus-visible {
 
 .proveit-control {
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  transition: background-color 120ms ease, border-color 120ms ease;
+  border-radius: var(--radius-md);
+  background: var(--input);
+  color: var(--text);
+  min-height: var(--control-height);
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .proveit-control:hover {
-  background: var(--hover);
+  border-color: var(--border-strong);
 }
+
+.proveit-control:focus-visible {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus), transparent 80%);
+}
+
+.proveit-control[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger), transparent 84%);
+}
+
+.proveit-control:disabled {
+  cursor: not-allowed;
+  background: var(--surface-subtle);
+  color: var(--text-subtle);
+  opacity: 0.72;
+}
+
+.proveit-button {
+  display: inline-flex;
+  min-height: var(--control-height);
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.9rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.proveit-button:hover:not(:disabled) { transform: translateY(-1px); }
+.proveit-button:active:not(:disabled) { transform: translateY(0); }
+.proveit-button:disabled { cursor: not-allowed; opacity: 0.5; }
+.proveit-button-primary { background: var(--brand-primary); color: var(--on-brand-primary); box-shadow: var(--shadow-sm); }
+.proveit-button-primary:hover:not(:disabled) { background: var(--brand-primary-strong); box-shadow: 0 4px 12px color-mix(in srgb, var(--brand-primary), transparent 78%); }
+.proveit-button-secondary { border-color: var(--border); background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.proveit-button-secondary:hover:not(:disabled) { border-color: var(--border-strong); background: var(--hover); }
+.proveit-button-ghost { color: var(--text-muted); }
+.proveit-button-ghost:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.proveit-button-danger { background: var(--danger); color: var(--on-danger); }
+.proveit-button-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger), #000 12%); }
+.proveit-button-sm { min-height: 2rem; padding: 0.35rem 0.65rem; font-size: 0.75rem; }
+.proveit-button-lg { min-height: 2.75rem; padding: 0.7rem 1.1rem; }
+.proveit-icon-button { width: var(--control-height); padding: 0; }
+.proveit-icon-button svg { height: 1.125rem; width: 1.125rem; }
+
+.proveit-feedback {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.85rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.proveit-feedback-info { border-color: color-mix(in srgb, var(--info), transparent 68%); background: var(--info-soft); color: var(--info); }
+.proveit-feedback-success { border-color: color-mix(in srgb, var(--success), transparent 68%); background: var(--success-soft); color: var(--success); }
+.proveit-feedback-warning { border-color: color-mix(in srgb, var(--warning), transparent 68%); background: var(--warning-soft); color: var(--warning); }
+.proveit-feedback-danger { border-color: color-mix(in srgb, var(--danger), transparent 68%); background: var(--danger-soft); color: var(--danger); }
 
 table input,
 table select {
